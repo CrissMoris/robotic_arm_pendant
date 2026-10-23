@@ -1,0 +1,3 @@
+# Generated safety-test reports (JSON/CSV) are never committed; keep the folder.
+*
+!.gitignore

@@ -161,6 +161,7 @@ catkin_install_python(PROGRAMS
   scripts/pendant_bridge.py
   scripts/pendant_status.py
   scripts/find_task_poses.py
+  scripts/safety_tests.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
