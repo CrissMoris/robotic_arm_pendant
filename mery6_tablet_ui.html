@@ -298,7 +298,7 @@ table.mon td.err{color:var(--amber);}
         </div>
         <div class="stat-grid">
           <div class="sc"><div class="sc-label">Bridge durumu</div><div class="sc-val" id="sv-state" style="color:var(--text2);">—</div></div>
-          <div class="sc"><div class="sc-label">Gripper <span class="note">(nesne tutulmaz — sim.)</span></div><div class="sc-val" id="sv-gripper" style="color:var(--text2);">—</div></div>
+          <div class="sc"><div class="sc-label">Gripper <span class="note">(kinematik bağlama — sim.)</span></div><div class="sc-val" id="sv-gripper" style="color:var(--text2);">—</div></div>
           <div class="sc"><div class="sc-label">Çarpışma</div><div class="sc-val" id="sv-coll" style="color:var(--text2);">—</div></div>
           <div class="sc"><div class="sc-label">Son hata</div><div class="sc-val" id="sv-err" style="color:var(--text2);font-size:12px;">—</div></div>
         </div>
@@ -393,8 +393,13 @@ table.mon td.err{color:var(--amber);}
           <div class="k">Çevrim süresi</div><div class="v" id="run-cycle">—</div>
           <div class="k">Son sonuç</div><div class="v" id="run-result">—</div>
           <div class="k">Çevrim sayısı</div><div class="v" id="run-count">—</div>
+          <div class="k">Bardak</div><div class="v" id="run-object">—</div>
         </div>
-        <div class="note warn" style="margin-top:10px;">Simülasyon sınırı: tutma (grasp) plugin'i yok — PICK'te parmaklar kapanır ama fincan gripper'a bağlanmaz; TRANSFER boş gripper ile yapılır.</div>
+        <div class="note warn" style="margin-top:10px;">Simülasyon sınırı: bardak, parmak teması ile değil kinematik bağlama ile (link attacher) taşınır; VERIFY_LIFT ve VERIFY_PLACE bardağın gerçekten kalktığını ve pad üzerine bırakıldığını ölçer. Başarısız/durdurulan görev bardağı otomatik bırakmaz.</div>
+        <div style="margin-top:8px;display:flex;gap:6px;">
+          <button class="c-btn" onclick="pendantCmd({cmd:'reset_scene', object:'cup'})"><i class="ti ti-refresh"></i> Sahneyi sıfırla (bardak başa)</button>
+          <button class="c-btn" onclick="pendantCmd({cmd:'detach', object:'cup'})"><i class="ti ti-link-off"></i> Bardağı çöz</button>
+        </div>
       </div>
       <div class="panel">
         <div class="p-hdr"><div class="p-title"><i class="ti ti-list-check"></i>Program Seç</div></div>
@@ -796,6 +801,8 @@ function onBridgeStatus(st){
   document.getElementById('run-cycle').textContent = t.running ? t.cycle_time_s+' s' : (t.last_cycle_time_s!=null ? t.last_cycle_time_s+' s (son)' : '—');
   document.getElementById('run-result').textContent = t.result ? t.result+(t.message?' — '+t.message:'') : '—';
   document.getElementById('run-count').textContent = t.count!=null ? t.count : '—';
+  const ob=(st.object||{}).cup;
+  document.getElementById('run-object').textContent = ob ? ((ob.attached?'gripper\'a bağlı':'serbest')+(ob.at_start?' · başlangıçta':'')+(ob.at_place?' · pad üzerinde':'')+(ob.pose_base?' · ('+ob.pose_base.map(v=>v.toFixed(2)).join(', ')+')':'')+(ob.attacher_available?'':' · attacher YOK')) : '—';
   document.getElementById('run-status-label').textContent = t.running ? 'Running' : 'Stopped';
   if(t.steps && t.steps.length && (t.name===selectedTask || t.running)) buildTraceList(t.steps);
   document.getElementById('prog-lbl').textContent = t.running ? 'Adım '+(t.step_index+1)+'/'+t.step_count+' — '+(t.step_name||'')+' ['+st.state+']' : (t.result ? 'Son görev: '+t.result+(t.last_cycle_time_s!=null?' · '+t.last_cycle_time_s+' s':'') : '—');

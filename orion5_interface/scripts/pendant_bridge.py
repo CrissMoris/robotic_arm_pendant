@@ -52,6 +52,14 @@ from geometry_msgs.msg import Pose, PoseStamped
 from moveit_msgs.msg import MoveItErrorCodes
 from moveit_msgs.srv import GetStateValidity, GetStateValidityRequest
 from mcfly_grippers.srv import GripperControl
+from gazebo_msgs.msg import ModelStates, LinkStates
+from gazebo_msgs.srv import SetModelState, SetModelStateRequest
+try:
+    from gazebo_ros_link_attacher.srv import Attach, AttachRequest
+    HAVE_ATTACHER = True
+except ImportError:      # package not built in the workspace: attach/detach steps fail with a clear message
+    Attach = AttachRequest = None
+    HAVE_ATTACHER = False
 import tf.transformations as tft
 
 ARM_JOINTS = ["joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6"]
@@ -68,6 +76,9 @@ EEF_LINK = "eef_tcp_link"          # MoveIt tip (= MC1 fingertip TCP)
 EEF_PARENT_LINK = "eef_link"       # flange link the gripper (and the envelope box) hang from
 REF_FRAME = "base_link"
 ENVELOPE_NAME = "gripper_envelope"
+ATTACH_SERVICE = "/link_attacher_node/attach"
+DETACH_SERVICE = "/link_attacher_node/detach"
+SET_MODEL_STATE_SERVICE = "/gazebo/set_model_state"
 
 STATE_IDLE = "IDLE"
 STATE_PLANNING = "PLANNING"
@@ -77,7 +88,7 @@ STATE_FAILED = "FAILED"
 STATE_STOPPED = "STOPPED"
 STATE_ESTOP = "ESTOP"
 
-GRASP_NOTE = "fingers at closed angle - object grasp is NOT simulated (no attach plugin)"
+GRASP_NOTE = "fingers at closed angle - the object is carried by a kinematic link attachment (simulation), not by a physics grasp"
 TAUGHT_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,31}$")
 
 GOAL_STATUS_NAMES = {v: k for k, v in GoalStatus.__dict__.items()
@@ -181,6 +192,11 @@ class PendantBridge(object):
         except Exception:
             pass
         self.taught_file = rospy.get_param("~taught_poses_file", default_taught)
+        # Gazebo objects handled by task steps (simulation-only kinematic attachment, see config/pendant_bridge.yaml)
+        self.robot_model = str(rospy.get_param("~robot_model", "orion5_v166"))
+        self.gazebo_z_offset = float(rospy.get_param("~gazebo_z_offset", 0.40))
+        self.gripper_link_candidates = list(rospy.get_param("~gripper_link_candidates", ["gripper_base", "eef_link", "link_6"]))
+        self.objects = {str(o["name"]): o for o in (rospy.get_param("~objects", []) or []) if o.get("name")}
 
         self.limits = load_urdf_limits()
 
@@ -201,7 +217,7 @@ class PendantBridge(object):
         self.step_note = None               # human-readable note for the current task step
         self.collision = {"valid": None, "contacts": []}
         self.gripper = {"cmd_deg": None, "angle_deg": None, "state": "UNKNOWN", "reached": None,
-                        "note": "CLOSED = fingers at closed angle; no grasp/attach in simulation"}
+                        "note": "CLOSED = fingers at closed angle; the object is carried by a kinematic attachment (simulation)"}
         self.task = {"name": None, "running": False, "step_index": -1, "step_count": 0,
                      "step_name": None, "steps": [], "cycle_time_s": 0.0,
                      "last_cycle_time_s": None, "count": 0, "result": None, "message": ""}
@@ -209,6 +225,13 @@ class PendantBridge(object):
         self.task_t0 = None
         self.workcell_loaded = []
         self.taught = {}
+        self.model_poses = {}        # Gazebo model name -> (x, y, z) in the Gazebo world frame
+        self.model_poses_wall = 0.0
+        self.gazebo_links = set()    # "model::link" names seen once on /gazebo/link_states
+        self.attached = {}           # object name -> gripper link it is attached to (bridge-side bookkeeping)
+        self.set_state_srv = None
+        self.attach_srv = None
+        self.detach_srv = None
 
         # ---- ROS interfaces ----------------------------------------------
         self.js = JointStateCache()
@@ -255,6 +278,7 @@ class PendantBridge(object):
 
         self.taught = self._load_taught()
         self.add_workcell_objects()
+        self._init_gazebo_objects()
 
         # ---- worker + timers ---------------------------------------------
         self.jobs = queue.Queue()
@@ -346,10 +370,15 @@ class PendantBridge(object):
                 "task_requirements": reqs,
                 "workcell_loaded": list(self.workcell_loaded),
                 "gripper_envelope": self.envelope,
+                "objects": {n: {"gazebo_model": o.get("gazebo_model", n), "start_xyz_base": o.get("start_xyz_base"),
+                                "place_xyz_base": o.get("place_xyz_base"), "tolerance_m": o.get("tolerance_m", 0.03)}
+                            for n, o in self.objects.items()},
+                "attacher_available": self.attach_srv is not None,
                 "eef_link": EEF_LINK, "ref_frame": REF_FRAME,
                 "estop_is_simulation_only": True,
                 "limitations": ["simulation E-STOP only (not safety-rated)",
-                                "no grasp/attach plugin: CLOSED = fingers at closed angle, cup stays on the table",
+                                "object handling = kinematic link attachment (gazebo_ros_link_attacher), not a physics grasp; "
+                                "a failed/stopped task never detaches automatically",
                                 "gripper collision = approximate attached envelope box (planning only)",
                                 "HOME is an elbow+wrist singularity: start Cartesian moves from READY"]}
 
@@ -729,6 +758,16 @@ class PendantBridge(object):
         if name == "delete_taught":
             self.delete_taught(cmd)
             return
+        if name in ("attach", "detach", "reset_scene"):
+            # Gazebo object handling (no robot motion). Allowed under E-STOP; refused while a job is running.
+            if self.busy:
+                self.set_result(cmd, "rejected", "bridge busy — wait for the current command")
+                return
+            self.step_note = None
+            handler = {"attach": self.attach_object, "detach": self.detach_object, "reset_scene": self.scene_reset}[name]
+            ok = handler(cmd.get("object", next(iter(self.objects), "cup")))
+            self.set_result(cmd, "ok" if ok else "error", self.step_note if ok else self.last_error)
+            return
         if name == "reload_workcell":
             self.add_workcell_objects()
             self.publish_info()
@@ -1045,6 +1084,14 @@ class PendantBridge(object):
             return self.state_check(step)
         if t == "named_if_needed":
             return self.named_if_needed(step)
+        if t == "scene_reset":
+            return self.scene_reset(step.get("object", "cup"))
+        if t == "attach":
+            return self.attach_object(step.get("object", "cup"))
+        if t == "detach":
+            return self.detach_object(step.get("object", "cup"))
+        if t == "verify_object":
+            return self.verify_object(step.get("object", "cup"), step.get("expect", "at_place"), step.get("tol_m"))
         if t == "named":
             return self.move_named(step.get("pose", step.get("name_pose", "")))
         if t == "joint":
@@ -1140,6 +1187,223 @@ class PendantBridge(object):
                 rospy.loginfo("pendant_bridge: %s", self.step_note)
         return self.move_named(pose)
 
+    # ---- Gazebo objects: scene reset, kinematic attach/detach, measured checks (SIMULATION ONLY) ----
+    def _init_gazebo_objects(self):
+        if not self.objects:
+            return
+        rospy.Subscriber("/gazebo/model_states", ModelStates, self._on_model_states, queue_size=1)
+        self._link_sub = rospy.Subscriber("/gazebo/link_states", LinkStates, self._on_link_states, queue_size=1)
+        try:
+            rospy.wait_for_service(SET_MODEL_STATE_SERVICE, timeout=5.0)
+            self.set_state_srv = rospy.ServiceProxy(SET_MODEL_STATE_SERVICE, SetModelState)
+        except rospy.ROSException:
+            rospy.logwarn("pendant_bridge: %s not available — scene_reset steps will fail", SET_MODEL_STATE_SERVICE)
+        if not HAVE_ATTACHER:
+            rospy.logwarn("pendant_bridge: gazebo_ros_link_attacher is not installed — attach/detach steps will fail "
+                          "(git clone https://github.com/pal-robotics/gazebo_ros_link_attacher.git into catkin_ws/src)")
+            return
+        try:
+            rospy.wait_for_service(ATTACH_SERVICE, timeout=5.0)
+            self.attach_srv = rospy.ServiceProxy(ATTACH_SERVICE, Attach)
+            self.detach_srv = rospy.ServiceProxy(DETACH_SERVICE, Attach)
+        except rospy.ROSException:
+            rospy.logwarn("pendant_bridge: %s not available (is the ros_link_attacher_plugin loaded in the world?)", ATTACH_SERVICE)
+
+    def _on_model_states(self, msg):
+        now = time.time()
+        if now - self.model_poses_wall < 0.05:      # topic is published at the physics rate; 20 Hz is plenty
+            return
+        with self.lock:
+            for n, p in zip(msg.name, msg.pose):
+                self.model_poses[n] = (p.position.x, p.position.y, p.position.z)
+            self.model_poses_wall = now
+
+    def _on_link_states(self, msg):
+        self.gazebo_links = set(msg.name)
+        try:
+            self._link_sub.unregister()             # one snapshot is enough (link names do not change)
+        except Exception:
+            pass
+
+    def object_cfg(self, name):
+        return self.objects.get(str(name))
+
+    def object_pose_base(self, name):
+        """Object centre in base_link coordinates from /gazebo/model_states, or None if unknown/stale."""
+        cfg = self.object_cfg(name)
+        if not cfg:
+            return None
+        with self.lock:
+            p = self.model_poses.get(cfg.get("gazebo_model", name))
+            fresh = (time.time() - self.model_poses_wall) < 1.0
+        if p is None or not fresh:
+            return None
+        return [p[0], p[1], p[2] - self.gazebo_z_offset]
+
+    @staticmethod
+    def _near(a, b, tol):
+        return math.hypot(a[0] - b[0], a[1] - b[1]) <= tol and abs(a[2] - b[2]) <= tol
+
+    def gripper_gazebo_link(self):
+        """Gazebo lumps fixed-joint children into their parent, so the gripper usually lives in link_6."""
+        for cand in self.gripper_link_candidates:
+            if "%s::%s" % (self.robot_model, cand) in self.gazebo_links:
+                return cand
+        return self.gripper_link_candidates[-1]
+
+    def object_status(self):
+        out = {}
+        for name, cfg in self.objects.items():
+            pb = self.object_pose_base(name)
+            tol = float(cfg.get("tolerance_m", 0.03))
+            st = {"pose_base": [round(v, 4) for v in pb] if pb else None,
+                  "attached": name in self.attached, "attached_to": self.attached.get(name),
+                  "at_start": self._near(pb, cfg["start_xyz_base"], tol) if (pb and cfg.get("start_xyz_base")) else None,
+                  "at_place": self._near(pb, cfg["place_xyz_base"], tol) if (pb and cfg.get("place_xyz_base")) else None,
+                  "attacher_available": self.attach_srv is not None,
+                  "set_state_available": self.set_state_srv is not None}
+            out[name] = st
+        return out
+
+    def scene_reset(self, name):
+        """Put the object back at its start pose (detaching first if needed). No robot motion."""
+        cfg = self.object_cfg(name)
+        if not cfg or not cfg.get("start_xyz_base"):
+            self.set_state(STATE_FAILED, "unknown object '%s' (see ~objects)" % name)
+            return False
+        if self.set_state_srv is None:
+            self.set_state(STATE_FAILED, "%s unavailable — cannot reset '%s'" % (SET_MODEL_STATE_SERVICE, name))
+            return False
+        if name in self.attached and not self.detach_object(name):
+            return False
+        req = SetModelStateRequest()
+        ms = req.model_state
+        ms.model_name = cfg.get("gazebo_model", name)
+        ms.reference_frame = "world"
+        x, y, z = [float(v) for v in cfg["start_xyz_base"]]
+        ms.pose.position.x, ms.pose.position.y, ms.pose.position.z = x, y, z + self.gazebo_z_offset
+        q = tft.quaternion_from_euler(*deg2rad(cfg.get("start_rpy_deg", [0, 0, 0])))
+        ms.pose.orientation.x, ms.pose.orientation.y, ms.pose.orientation.z, ms.pose.orientation.w = q
+        try:
+            resp = self.set_state_srv(req)
+        except Exception as exc:
+            self.set_state(STATE_FAILED, "set_model_state failed: %s" % exc)
+            return False
+        if not resp.success:
+            self.set_state(STATE_FAILED, "set_model_state refused: %s" % resp.status_message)
+            return False
+        tol = float(cfg.get("tolerance_m", 0.03))
+        t0 = time.time()
+        pb = None
+        while time.time() - t0 < 2.0 and not rospy.is_shutdown():
+            pb = self.object_pose_base(name)
+            if pb and self._near(pb, cfg["start_xyz_base"], tol):
+                self.step_note = "%s reset to start %s (measured %s)" % (name, cfg["start_xyz_base"], [round(v, 3) for v in pb])
+                rospy.loginfo("pendant_bridge: SCENE_RESET — %s", self.step_note)
+                return True
+            time.sleep(0.05)
+        self.set_state(STATE_FAILED, "%s not at its start pose after reset (measured %s)" % (name, pb))
+        return False
+
+    def attach_object(self, name):
+        """Kinematic attachment gripper link <-> object (fixed joint via gazebo_ros_link_attacher). Not a physics grasp."""
+        cfg = self.object_cfg(name)
+        if not cfg:
+            self.set_state(STATE_FAILED, "unknown object '%s'" % name)
+            return False
+        if self.attach_srv is None:
+            self.set_state(STATE_FAILED, "link attacher unavailable — install gazebo_ros_link_attacher and load its world plugin")
+            return False
+        pb = self.object_pose_base(name)
+        tcp = self.current_tcp()
+        if pb is None or tcp is None:
+            self.set_state(STATE_FAILED, "attach: object pose or TCP pose unavailable")
+            return False
+        d = math.sqrt((tcp["x"] - pb[0]) ** 2 + (tcp["y"] - pb[1]) ** 2 + (tcp["z"] - pb[2]) ** 2)
+        radius = float(cfg.get("attach_radius_m", 0.08))
+        if d > radius:
+            self.set_state(STATE_FAILED, "attach refused: TCP is %.3f m from %s (limit %.3f m) — not at the pick pose" % (d, name, radius))
+            return False
+        link = self.gripper_gazebo_link()
+        req = AttachRequest()
+        req.model_name_1, req.link_name_1 = self.robot_model, link
+        req.model_name_2, req.link_name_2 = cfg.get("gazebo_model", name), cfg.get("gazebo_link", "link")
+        try:
+            resp = self.attach_srv(req)
+        except Exception as exc:
+            self.set_state(STATE_FAILED, "attach service failed: %s" % exc)
+            return False
+        if not resp.ok:
+            self.set_state(STATE_FAILED, "attach refused by the link attacher (%s::%s <-> %s::%s)" % (
+                self.robot_model, link, req.model_name_2, req.link_name_2))
+            return False
+        self.attached[name] = link
+        self.step_note = "%s attached to %s::%s (TCP %.3f m from object centre) — kinematic joint, not a physics grasp" % (
+            name, self.robot_model, link, d)
+        rospy.loginfo("pendant_bridge: ATTACH — %s", self.step_note)
+        return True
+
+    def detach_object(self, name):
+        cfg = self.object_cfg(name)
+        if not cfg:
+            self.set_state(STATE_FAILED, "unknown object '%s'" % name)
+            return False
+        if self.detach_srv is None:
+            self.set_state(STATE_FAILED, "link attacher unavailable — cannot detach '%s'" % name)
+            return False
+        link = self.attached.get(name) or self.gripper_gazebo_link()
+        req = AttachRequest()
+        req.model_name_1, req.link_name_1 = self.robot_model, link
+        req.model_name_2, req.link_name_2 = cfg.get("gazebo_model", name), cfg.get("gazebo_link", "link")
+        try:
+            resp = self.detach_srv(req)
+        except Exception as exc:
+            self.set_state(STATE_FAILED, "detach service failed: %s" % exc)
+            return False
+        if not resp.ok and name in self.attached:
+            self.set_state(STATE_FAILED, "detach refused by the link attacher")
+            return False
+        self.attached.pop(name, None)
+        time.sleep(0.5)                                  # let the object settle on its support
+        self.step_note = "%s detached from %s::%s" % (name, self.robot_model, link)
+        rospy.loginfo("pendant_bridge: DETACH — %s", self.step_note)
+        return True
+
+    def verify_object(self, name, expect, tol=None):
+        """Measured check on the Gazebo object pose: lifted | at_place | at_start | attached."""
+        cfg = self.object_cfg(name)
+        if not cfg:
+            self.set_state(STATE_FAILED, "unknown object '%s'" % name)
+            return False
+        if expect == "attached":
+            ok = name in self.attached
+            detail = "attached=%s" % ok
+        else:
+            pb = self.object_pose_base(name)
+            if pb is None:
+                self.set_state(STATE_FAILED, "verify_object: no fresh pose for '%s' (/gazebo/model_states)" % name)
+                return False
+            tol = float(tol if tol is not None else cfg.get("tolerance_m", 0.03))
+            if expect == "lifted":
+                min_lift = float(cfg.get("min_lift_m", 0.03))
+                ok = pb[2] > float(cfg["start_xyz_base"][2]) + min_lift
+                detail = "z %.3f vs start %.3f (+%.3f required)" % (pb[2], cfg["start_xyz_base"][2], min_lift)
+            elif expect == "at_place":
+                ok = self._near(pb, cfg["place_xyz_base"], tol)
+                detail = "measured %s vs place target %s (tol %.3f)" % ([round(v, 3) for v in pb], cfg["place_xyz_base"], tol)
+            elif expect == "at_start":
+                ok = self._near(pb, cfg["start_xyz_base"], tol)
+                detail = "measured %s vs start %s (tol %.3f)" % ([round(v, 3) for v in pb], cfg["start_xyz_base"], tol)
+            else:
+                self.set_state(STATE_FAILED, "verify_object: unknown expectation '%s'" % expect)
+                return False
+        if not ok:
+            self.set_state(STATE_FAILED, "verify_object %s '%s' failed: %s" % (expect, name, detail))
+            return False
+        self.step_note = "%s %s: %s" % (name, expect, detail)
+        rospy.loginfo("pendant_bridge: VERIFY — %s", self.step_note)
+        return True
+
     # ---- stop / estop ------------------------------------------------------
     def _hold_controllers(self):
         """Empty trajectory = cancel current trajectory and hold position (JointTrajectoryController)."""
@@ -1196,6 +1460,7 @@ class PendantBridge(object):
 
     def publish_status(self, _evt):
         self.gripper_status()
+        obj_status = self.object_status()          # computed outside the lock (object_pose_base locks itself)
         live = self.js.positions(ARM_JOINTS)
         with self.lock:
             target = [self.target_rad[n] for n in ARM_JOINTS] if self.target_rad else None
@@ -1223,6 +1488,7 @@ class PendantBridge(object):
                 "task": json.loads(json.dumps(self.task)),
                 "teach_last": self.teach_last,
                 "taught_count": len(self.taught),
+                "object": obj_status,
                 "workcell_loaded": list(self.workcell_loaded),
             }
         st["tcp"] = self.current_tcp()

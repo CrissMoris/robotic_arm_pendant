@@ -78,7 +78,7 @@ TESTS = [
     ("D3", "joint_limit", False, "Out-of-limit joint targets are rejected by the bridge before planning; boundary policy preserved"),
     ("D4", "collision_check", False, "A goal inside the table is invalid in the planning scene and cannot be planned (+ D4b route-around)"),
     ("D5", "estop_during_motion", True, "Simulation E-STOP during a controlled move: stop, reject, reset, resume"),
-    ("D6", "barista_regression", True, "N consecutive Barista cycles with per-cycle planning/execution outcomes"),
+    ("D6", "barista_regression", True, "N consecutive Barista cycles with per-cycle planning/execution outcomes and the cup measured on the place pad"),
 ]
 TEST_INFO = {t[0]: t for t in TESTS}
 SIM_NOTE = "simulation only — the bridge E-STOP is not a safety-rated stop; no grasp is simulated"
@@ -961,6 +961,13 @@ def test_d6(ctx):
                 c["phase"] = "planning"
             else:
                 c["phase"] = "execution"
+        obj = ((st or {}).get("object") or {}).get("cup") or {}
+        c["object_at_place"] = obj.get("at_place")          # None when the object is not tracked
+        c["object_attached_after"] = obj.get("attached")
+        if c["result"] == "ok" and c["object_at_place"] is False:
+            c["result"] = "failed"
+            c["failure_step"] = c["failure_step"] or "VERIFY_PLACE"
+            c["error_message"] = "task reported ok but the cup is not on the place pad"
         c["plan_success"] = c["result"] == "ok" or c["phase"] not in ("planning",)
         c["execution_success"] = c["result"] == "ok"
         cycles.append(c)

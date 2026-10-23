@@ -6,6 +6,7 @@ planning/validation. No EtherCAT/SOEM layer is used (the `soem_*` packages are u
 
 ```
 sudo apt install ros-noetic-rosbridge-server ros-noetic-moveit-commander python3-urdfdom-py
+cd ~/catkin_ws/src && git clone https://github.com/pal-robotics/gazebo_ros_link_attacher.git   # cup attach/detach (Phase E)
 cd ~/catkin_ws && catkin_make && source devel/setup.bash
 chmod +x src/orion-5/orion5_interface/scripts/pendant_bridge.py
 roslaunch orion5_interface mery6_simulation.launch
@@ -31,7 +32,8 @@ safety-rated E-STOP. Gripper "CLOSED" means the fingers reached the closed angle
 |---|---|
 | Gazebo workcell (pedestal, table, cup, coffee machine, place pad) | `orion5_description/world/barista.world` (robot spawned at `z:=0.4`) |
 | MoveIt planning-scene objects (floor, pedestal, table, coffee_machine, place_pad) + gripper envelope | `orion5_interface/config/pendant_bridge.yaml` (`workcell:`, `gripper_envelope:`), base_link frame, `z_base = z_gazebo - 0.40` |
-| Task definition (13 steps, Phase D) | `orion5_interface/config/barista_task.yaml` |
+| Task definition (18 steps, Phase D + E) | `orion5_interface/config/barista_task.yaml` |
+| Cup object settings (start/place pose, attachment) | `orion5_interface/config/pendant_bridge.yaml` (`objects:`) |
 | Taught poses (written by the pendant **Teach** button) | `orion5_interface/config/taught_poses.yaml` |
 | Verification helper | `rosrun orion5_interface pendant_status.py [keys…] | --watch task | --info` |
 | Candidate pose search (planning only, never writes taught poses) | `rosrun orion5_interface find_task_poses.py` → `config/pose_candidates.yaml` (inputs: `config/pose_search.yaml`) |
@@ -54,9 +56,19 @@ automatic recovery motion**; the operator decides the next command. Status extra
 `state: skipped`, `plan.cmd_id` / `plan.attempted`, `exec.cmd_id` / `exec.attempted`, and the read-only command
 `{"cmd":"resolve_pose","name":"HOME"}` returns exactly the joints `move_named` would command.
 
+Phase E (cup handling, 18 steps): `SCENE_RESET` puts the cup back at its start pose at the beginning of every cycle
+(`/gazebo/set_model_state`; detaches first if needed), `ATTACH_CUP` after `GRIPPER_CLOSE` creates a kinematic fixed
+joint between the gripper link and the cup (`gazebo_ros_link_attacher`, refused if the TCP is not at the cup),
+`VERIFY_LIFT` after `RETRACT_PICK` measures that the cup rose with the gripper, `DETACH_CUP` after `RELEASE` removes
+the joint, and `VERIFY_PLACE` measures that the cup rests on the place pad (tolerance in `objects:`). The pendant
+Run page shows the cup state (`attached`, `at_start`, `at_place`, pose) and offers "Sahneyi sıfırla" (`reset_scene`)
+and "Bardağı çöz" (`detach`). The bridge status carries `object.cup`. A failed or stopped task never detaches or
+moves the cup on its own.
+
 Simulation limitations (also published in `/pendant/robot_info.limitations`):
-- No grasp/attach plugin: the cup is **not** attached to the gripper; `GRIPPER_CLOSE` only verifies the finger
-  angle and the transfer to `PRE_PLACE` moves an empty gripper. The cup is not a planning-scene obstacle (it is the target).
+- The cup is carried by a **kinematic link attachment**, not by finger contact forces (the MC1 fingers have no
+  collision geometry): `GRIPPER_CLOSE` verifies the finger angle, `ATTACH_CUP` creates the joint. The transfer is
+  measured with `VERIFY_LIFT` / `VERIFY_PLACE`. The cup is not a planning-scene obstacle (it is the target).
 - The MC1 links have no collision geometry; an approximate box attached to `eef_link` in the planning scene stands
   in for the gripper (planning only, not Gazebo physics; open fingers along ±x are not covered).
 - Joint jog bypasses MoveIt (no collision check); use Cartesian jog for the final approach while teaching.
@@ -92,7 +104,8 @@ rosrun orion5_interface safety_tests.py --tests D6 --approve-motion --barista-cy
 Rules: motion tests never start without `--approve-motion` plus an interactive confirmation; after a failure, stop or
 E-STOP the runner issues **no** recovery motion; a test that could not be executed is reported as SKIP with its reason,
 and stages that were not attempted are `null`, never failures. Exit code 1 if any test FAILs. The E-STOP exercised here is
-the bridge's simulation stop, not a safety-rated hardware E-STOP; physical cup grasping is not simulated (deferred).
+the bridge's simulation stop, not a safety-rated hardware E-STOP; the cup is carried by a kinematic attachment, not a
+physics grasp. D6 counts a cycle as successful only if the task result is `ok` and the cup is measured on the place pad.
 
 ---
 
