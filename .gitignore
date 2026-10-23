@@ -1,0 +1,99 @@
+# ==========================================
+# ROS / Catkin build artifacts
+# ==========================================
+build/
+devel/
+install/
+logs/
+
+# Catkin tools
+.catkin_tools/
+.catkin_workspace
+
+# ==========================================
+# Python
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python packaging
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.eggs/
+*.egg-info/
+dist/
+wheels/
+
+# ==========================================
+# IDEs and editors
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ==========================================
+# ROS / Gazebo runtime artifacts
+# ==========================================
+*.bag
+*.bag.active
+*.db3
+*.mcap
+
+# ROS logs and generated outputs
+rosout.log
+*.log
+
+# Gazebo generated state and temporary files
+*.gazebo
+*.world.bak
+*.sdf.bak
+*.urdf.bak
+
+# ==========================================
+# Generated files
+# ==========================================
+*.pyc
+*.pyo
+*.tmp
+*.temp
+*.orig
+*.rej
+
+# ==========================================
+# OS-specific files
+# ==========================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==========================================
+# Credentials and local configuration
+# ==========================================
+.env
+.env.*
+!.env.example
+
+# Private keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+
+# ==========================================
+# Local simulation / debug artifacts
+# ==========================================
+core
+core.*
+*.dump

@@ -1,0 +1,22 @@
+<launch>    
+ 
+  <!--Robot description and related parameters -->
+  <param name="robot_description" textfile="$(find orion5_description)/urdf/orion5_v166.urdf" />
+
+
+  <!-- Controller  -->
+  <rosparam file="$(find orion5_description)/config/robot_controllers.yaml"/>
+
+  <node name="joint_state_controller_spawner" pkg="controller_manager" type="controller_manager" 
+        args="spawn joint_state_controller" output="screen"/>
+
+  <node name="pos_joint_traj_controller_loader" pkg="controller_manager" type="controller_manager" 
+        args="load orion_arm_pos_joint_traj_controller orion_arm_joint_group_pos_controller orion_arm_effort_controller" output="screen"/>
+  
+  <!-- activating joint_state_publisher and robot_state publisher and joint_state_publisher -->
+  <node name="RSP" pkg="robot_state_publisher" type="robot_state_publisher" output="screen"/>
+
+  <!-- start ros_control with soem ethercat driver -->
+  <include file="$(find soem_ros_control)/launch/soem_ros_control.launch" />
+
+</launch>

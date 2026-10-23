@@ -1,0 +1,19 @@
+joint_state_controller:
+  type: joint_state_controller/JointStateController
+  publish_rate: 50
+
+orion_arm_pos_joint_traj_controller:
+  type: position_controllers/JointTrajectoryController
+  joints:
+    - joint_1
+    - joint_2
+    - joint_3
+    - joint_4
+    - joint_5
+    - joint_6
+  state_publish_rate: 50
+  action_monitor_rate: 20
+  stop_trajectory_duration: 0.5
+  constraints:
+    stopped_velocity_tolerance: 0.01
+    goal_time: 5.0

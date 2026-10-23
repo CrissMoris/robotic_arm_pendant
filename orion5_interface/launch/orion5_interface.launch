@@ -1,0 +1,3 @@
+<launch>
+    <node name="orion5_interface" pkg="orion5_interface" type="orion5_interface.py" output="screen" />
+</launch>

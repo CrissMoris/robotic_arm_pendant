@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+
+<!-- Orion5 v1.66 arm + MC1 gripper. Single robot model used by Gazebo AND MoveIt
+     (robot name must match orion5_moveit_config/config/orion5_v166.srdf). -->
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="orion5_v166">
+
+   <xacro:include filename="$(find orion5_description)/urdf/orion5_v166_arm.xacro"/>
+   <xacro:include filename="$(find mcfly_grippers)/urdf/mc1_gripper.xacro"/>
+   <xacro:include filename="$(find orion5_description)/urdf/transmissions.xacro"/>
+   <xacro:include filename="$(find orion5_description)/urdf/gazebo_control.xacro"/>
+   <xacro:include filename="$(find orion5_description)/urdf/colors.xacro"/>
+
+   <link name="world"/>
+
+   <joint name="world_fixed_joint" type="fixed">
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
+      <parent link="world" />
+      <child link="base_link" />
+   </joint>
+
+   <!-- eef_tcp_link (MoveIt tip) is placed at the MC1 fingertip TCP:
+        eef_link -> gripper_base (0,0,0) -> gripper_tcp_link (0,0,mc1_tcp_offset_z) -->
+   <xacro:orion5_v166 tcp_z="${mc1_tcp_offset_z}"/>
+
+   <joint name="gripper_base_fixed_joint" type="fixed">
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
+      <parent link="eef_link" />
+      <child link="gripper_base" />
+   </joint>
+
+   <xacro:mc1_gripper />
+
+   <xacro:transmissions />
+   <xacro:gazebo_control />
+   <xacro:colors />
+
+</robot>

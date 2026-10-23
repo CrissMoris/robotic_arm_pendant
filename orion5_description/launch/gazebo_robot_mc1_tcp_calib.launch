@@ -1,0 +1,27 @@
+<launch>
+
+  <!--Robot description and related parameters -->
+  <param name="robot_description" command="$(find xacro)/xacro --inorder $(find orion5_description)/urdf/orion5_v166_robot_mc1.xacro"/>
+
+  <!-- Controller  -->
+  <rosparam file="$(find orion5_description)/config/robot_controllers.yaml"/>
+  <rosparam file="$(find mcfly_grippers)/config/mc1_gripper_controller.yaml"/>
+  <node name="Controller_Spawner" pkg="controller_manager" type="spawner" 
+        args="joint_state_controller orion_arm_pos_joint_traj_controller mc1_joint_state_controller mc1_traj_controller"/>
+
+  <!-- Gripper service server node -->
+  <node name="mc1_gripper_service" pkg="mcfly_grippers" type="mc1_gripper_service.py" />
+  
+  <!-- activating joint_state_publisher and robot_state publisher and joint_state_publisher -->
+  <node name="RSP" pkg="robot_state_publisher" type="robot_state_publisher" output="screen"/>
+
+  <!-- including Gazebo world -->
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+      <arg name="world_name" value="$(find orion5_description)/world/tcp_calib.world" />
+  </include>
+  
+  <!-- Executing Gazebo with robot -->
+  <node name="spawn_model" pkg="gazebo_ros" type="spawn_model" output="screen"
+        args="-param robot_description -urdf -model orion5_v166 -z 0.2" />
+
+</launch>

@@ -1,0 +1,5 @@
+float32 angle
+float32 time
+---
+string message
+bool success

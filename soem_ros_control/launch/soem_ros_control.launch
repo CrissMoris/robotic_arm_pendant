@@ -1,0 +1,7 @@
+<launch>    
+ 
+  <node name="soem_ros_control" pkg="soem_ros_control" type="soem_ros_control_node" output="screen" required="true" >
+    <rosparam file="$(find soem_ros_control)/config/soem_config.yaml" command="load"/>
+  </node>
+
+</launch>

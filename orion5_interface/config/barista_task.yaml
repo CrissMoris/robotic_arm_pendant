@@ -1,0 +1,45 @@
+# Barista validation task for pendant_bridge.py (loaded into ~tasks). Phase D simplified sequence.
+#
+# Step types:
+#   state_check      {}                                  no motion: fresh joint states, arm stationary, current state
+#                                                        collision-free (/check_state_validity); fails the task otherwise
+#   named_if_needed  {pose, unless_reachable}            moves to `pose` ONLY if needed: skipped when already there or when
+#                                                        a direct collision-checked OMPL plan to `unless_reachable` exists
+#                                                        (planning only, that plan is never executed)
+#   named            {pose}                              MoveIt joint-space plan to a pose name (named_poses -> taught -> SRDF)
+#   cartesian_to     {pose, dxyz?, min_fraction?}        straight-line TCP move to a TAUGHT pose's stored TCP (+ base_link
+#                                                        offset), avoid_collisions=True, 100 % path required by default
+#   gripper          {action: open|close}                MC1 service + finger-position verification
+#   cartesian_offset {dxyz, drpy_deg}  /  wait {seconds}
+#
+# Poses: HOME comes from named_poses (pendant_bridge.yaml). READY, PRE_PICK, PICK, PRE_PLACE and PLACE are the
+# operator-taught poses in taught_poses.yaml (pendant: Jog page -> Teach). Their values are referenced by name only and
+# are never modified by this file or by the bridge. run_task refuses to start while any of them is missing.
+#
+# Sequence (13 steps): no leading HOME/READY motions, no TRANSFER return after the pick. The lift after the pick
+# (RETRACT_PICK) and the retract after the place (RETRACT_PLACE) are kept as straight-line moves; the transfer
+# RETRACT_PICK -> PRE_PLACE is a collision-checked joint-space plan (no straight PICK->PLACE line is assumed).
+# HOME is the mandatory final step of every successfully completed cycle. A failed or stopped task performs no
+# automatic recovery motion.
+#
+# Limitation: there is no grasp/attach plugin. GRIPPER_CLOSE only verifies that the fingers reached the closed angle;
+# the cup is not attached and stays on the table during the transfer.
+
+tasks:
+  barista:
+    description: "Pick a cup at the coffee machine side and place it on the service pad (simulation validation, no grasp)"
+    steps:
+      - {name: STATE_CHECK,     type: state_check}
+      - {name: READY_IF_NEEDED, type: named_if_needed, pose: READY, unless_reachable: PRE_PICK, speed: 30}
+      - {name: PRE_PICK,        type: named,        pose: PRE_PICK,  speed: 30}
+      - {name: APPROACH_PICK,   type: cartesian_to, pose: PICK,      dxyz: [0.0, 0.0, 0.03], speed: 15}
+      - {name: GRIPPER_OPEN,    type: gripper,      action: open}
+      - {name: PICK,            type: cartesian_to, pose: PICK,      speed: 10}
+      - {name: GRIPPER_CLOSE,   type: gripper,      action: close}
+      - {name: RETRACT_PICK,    type: cartesian_to, pose: PRE_PICK,  speed: 15}
+      - {name: PRE_PLACE,       type: named,        pose: PRE_PLACE, speed: 30}
+      - {name: PLACE,           type: cartesian_to, pose: PLACE,     speed: 10}
+      - {name: RELEASE,         type: gripper,      action: open}
+      - {name: RETRACT_PLACE,   type: cartesian_to, pose: PRE_PLACE, speed: 15}
+      - {name: HOME,            type: named,        pose: HOME,      speed: 30}
+

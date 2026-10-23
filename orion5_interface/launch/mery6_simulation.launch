@@ -1,0 +1,58 @@
+<launch>
+  <!--
+    Mery6 / Orion5 simulation validation platform (simulation only, no EtherCAT/SOEM).
+
+      Web pendant (mery6_tablet_ui.html)
+        -> rosbridge websocket (:9090)
+        -> ROS Noetic
+        -> pendant_bridge.py -> MoveIt (move_group, FollowJointTrajectory) / ros_control
+        -> Gazebo (physics, orion_arm_pos_joint_traj_controller + mc1_traj_controller)
+      RViz: planning scene, targets, planned trajectories, collision visualisation.
+  -->
+
+  <arg name="world"          default="$(find orion5_description)/world/barista.world" doc="Gazebo world file"/>
+  <arg name="z"              default="0.4"  doc="Spawn height of the robot base (barista.world pedestal = 0.4)"/>
+  <arg name="gazebo_gui"     default="true"/>
+  <arg name="rviz"           default="true"/>
+  <arg name="rosbridge_port" default="9090"/>
+  <arg name="pendant_bridge" default="true" doc="Start the pendant bridge node (MoveIt executor)"/>
+  <arg name="bridge_config"  default="$(find orion5_interface)/config/pendant_bridge.yaml"/>
+  <arg name="task_config"    default="$(find orion5_interface)/config/barista_task.yaml"/>
+  <arg name="taught_poses"   default="$(find orion5_interface)/config/taught_poses.yaml" doc="Written by the Teach function"/>
+
+  <!-- 1. Gazebo + robot (arm + MC1) + ros_control controllers + gripper service + robot_state_publisher -->
+  <include file="$(find orion5_description)/launch/gazebo_robot_mc1.launch">
+    <arg name="world" value="$(arg world)"/>
+    <arg name="z"     value="$(arg z)"/>
+    <arg name="gui"   value="$(arg gazebo_gui)"/>
+  </include>
+
+  <!-- 2. MoveIt move_group: uses the robot_description already loaded above (same model as Gazebo),
+          simple controller manager -> /orion_arm_pos_joint_traj_controller/follow_joint_trajectory -->
+  <include file="$(find orion5_moveit_config)/launch/move_group.launch">
+    <arg name="load_robot_description"     value="false"/>
+    <arg name="moveit_controller_manager"  value="simple"/>
+    <arg name="allow_trajectory_execution" value="true"/>
+  </include>
+
+  <!-- 3. RViz with the MoveIt motion planning plugin -->
+  <include file="$(find orion5_moveit_config)/launch/moveit_rviz.launch" if="$(arg rviz)">
+    <arg name="rviz_config" value="$(find orion5_moveit_config)/rviz/moveit_display.rviz"/>
+  </include>
+
+  <!-- 4. rosbridge websocket for the web pendant -->
+  <include file="$(find rosbridge_server)/launch/rosbridge_websocket.launch">
+    <arg name="port" value="$(arg rosbridge_port)"/>
+  </include>
+
+  <!-- 5. Pendant bridge: JSON commands/status over /pendant/cmd and /pendant/status, MoveIt execution,
+          completion checks, gripper verification, workcell planning-scene objects, taught poses, tasks,
+          simulation E-STOP -->
+  <node name="pendant_bridge" pkg="orion5_interface" type="pendant_bridge.py" output="screen"
+        if="$(arg pendant_bridge)">
+    <rosparam file="$(arg bridge_config)" command="load"/>
+    <rosparam file="$(arg task_config)"   command="load"/>
+    <param name="taught_poses_file" value="$(arg taught_poses)"/>
+  </node>
+
+</launch>

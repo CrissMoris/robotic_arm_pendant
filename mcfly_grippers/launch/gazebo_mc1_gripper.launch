@@ -1,0 +1,16 @@
+<launch>
+
+    <param name="robot_description" textfile="$(find mcfly_grippers)/urdf/mc1_gripper.urdf"/>
+
+    <rosparam file="$(find mcfly_grippers)/config/mc1_gripper_controller.yaml"/>
+    <node name="Controller_Spawner" pkg="controller_manager" type="spawner" 
+          args="mc1_joint_state_controller mc1_traj_controller"/>
+    
+    <node name="RSP" pkg="robot_state_publisher" type="robot_state_publisher" output="screen"/>
+  
+    <include file="$(find gazebo_ros)/launch/empty_world.launch" />
+    
+    <node name="spawn_model" pkg="gazebo_ros" type="spawn_model" output="screen"
+          args="-param robot_description -urdf -model mc1_gripper" />
+  
+</launch>

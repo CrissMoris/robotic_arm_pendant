@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Mery6 Robot Control — MCUI</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/dist/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--bg4:#30363d;
+  --border:#30363d;--border2:#484f58;
+  --text:#e6edf3;--text2:#8b949e;--text3:#6e7681;
+  --green:#3fb950;--green2:#238636;
+  --blue:#58a6ff;--blue2:#1f6feb;
+  --red:#f85149;--red2:#da3633;
+  --amber:#d29922;--purple:#a371f7;
+  --font:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;
+  --mono:'SF Mono','Fira Code','Courier New',monospace;
+}
+html,body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:15px;line-height:1.5;min-height:100vh;}
+
+/* ---------- LOGIN ---------- */
+.login-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
+.login-card{background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:32px;width:100%;max-width:400px;}
+.login-logo{width:64px;height:64px;background:var(--blue2);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;color:#fff;margin:0 auto 16px;}
+.login-title{font-size:22px;font-weight:700;text-align:center;margin-bottom:4px;}
+.login-sub{font-size:13px;color:var(--text2);text-align:center;margin-bottom:28px;}
+.f-label{font-size:12px;color:var(--text2);margin-bottom:6px;}
+.f-inp{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:13px 14px;color:var(--text);font-size:15px;outline:none;font-family:var(--font);margin-bottom:14px;}
+.f-inp:focus{border-color:var(--blue2);}
+.login-btn{width:100%;background:var(--blue2);border:none;border-radius:10px;padding:14px;color:#fff;font-size:16px;font-weight:600;cursor:pointer;font-family:var(--font);margin-top:4px;}
+.login-err{font-size:13px;color:var(--red);text-align:center;margin-top:10px;min-height:20px;}
+.login-hint{font-size:12px;color:var(--text3);text-align:center;margin-top:14px;}
+
+/* ---------- APP SHELL ---------- */
+.app{display:none;flex-direction:column;min-height:100vh;padding:10px;gap:10px;}
+.topbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:8px 14px;}
+.topbar-left{display:flex;align-items:center;gap:10px;}
+.t-logo{width:32px;height:32px;background:var(--blue2);border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#fff;flex-shrink:0;}
+.t-title{font-weight:600;font-size:15px;}
+.t-sub{font-size:11px;color:var(--text2);}
+.chips{display:flex;gap:6px;flex-wrap:wrap;}
+.chip{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11px;color:var(--text2);display:flex;flex-direction:column;line-height:1.3;min-width:56px;}
+.chip b{font-size:12px;color:var(--text);font-weight:600;}
+.topbar-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.ip-inp{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font-size:13px;width:140px;outline:none;font-family:var(--font);}
+.ip-inp:focus{border-color:var(--blue2);}
+.c-btn{background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:6px 14px;color:var(--text);font-size:13px;cursor:pointer;font-family:var(--font);}
+.c-btn:active{background:var(--bg4);}
+.c-btn:disabled{opacity:.4;cursor:not-allowed;}
+.c-btn.sm{padding:4px 9px;font-size:12px;}
+.c-btn.danger{color:var(--red);border-color:var(--red2);}
+.conn-row{display:flex;align-items:center;gap:5px;}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--red);}
+.dot.on{background:var(--green);}
+.c-lbl{font-size:12px;color:var(--text2);}
+.estop-top{background:#3d0f0e;border:1px solid var(--red2);border-radius:8px;padding:6px 14px;color:var(--red);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);}
+.estop-top.active{background:var(--red2);color:#fff;}
+.user-pill{display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:5px 12px;}
+.avatar{width:24px;height:24px;border-radius:50%;background:var(--blue2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;}
+.logout{font-size:12px;color:var(--text3);cursor:pointer;background:none;border:none;font-family:var(--font);}
+
+.ros-status-bar{border-radius:10px;padding:8px 14px;font-size:12px;display:flex;align-items:center;gap:8px;border:1px solid;}
+.ros-status-bar.disconnected{background:#1a0e0e;border-color:var(--red2);color:var(--red);}
+.ros-status-bar.connecting{background:#1a1500;border-color:var(--amber);color:var(--amber);}
+.ros-status-bar.connected{background:#0d1a10;border-color:var(--green);color:var(--green);}
+.estop-warn{background:#3d0f0e;border:1px solid var(--red2);border-radius:10px;padding:12px 16px;display:none;align-items:center;gap:10px;font-size:13px;color:var(--red);}
+.estop-warn.show{display:flex;}
+
+/* ---------- NAV TABS ---------- */
+.navtabs{display:flex;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:6px;overflow-x:auto;}
+.navtab{flex:1;min-width:84px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 6px;border-radius:9px;cursor:pointer;color:var(--text2);font-size:11px;font-weight:600;background:none;border:none;font-family:var(--font);}
+.navtab i{font-size:19px;}
+.navtab.active{background:var(--blue2);color:#fff;}
+.page{display:none;flex-direction:column;gap:10px;}
+.page.active{display:flex;}
+
+.grid{display:grid;gap:10px;}
+@media(min-width:700px){.grid2{grid-template-columns:1.4fr 1fr;}.grid3{grid-template-columns:1fr 1fr;}}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px;}
+.p-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
+.p-title{font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px;}
+.p-title i{font-size:16px;color:var(--blue);}
+.badge{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:600;}
+.bg{background:#0d4a1a;color:var(--green);}
+.br{background:#3d0f0e;color:var(--red);}
+.ba{background:#2e1f00;color:var(--amber);}
+.bb{background:#0c2a4a;color:var(--blue);}
+.bn{background:var(--bg3);color:var(--text2);}
+
+.viewport{background:#000;border-radius:10px;min-height:160px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;border:1px solid var(--border);}
+.viewport i{font-size:64px;color:var(--border2);}
+.viewport .vp-label{position:absolute;top:10px;left:12px;font-size:11px;color:var(--text2);background:rgba(255,255,255,.05);padding:4px 10px;border-radius:8px;}
+.viewport .vp-hint{position:absolute;bottom:10px;left:12px;right:12px;font-size:11px;color:var(--text3);text-align:center;}
+
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+.sc{background:var(--bg3);border-radius:9px;padding:11px 13px;border:1px solid var(--border);}
+.sc-label{font-size:11px;color:var(--text2);margin-bottom:5px;}
+.sc-val{font-size:18px;font-weight:600;}
+
+.joint-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+.jn{font-size:12px;color:var(--text2);width:24px;flex-shrink:0;}
+.jbg{flex:1;height:7px;background:var(--bg4);border-radius:4px;overflow:hidden;position:relative;}
+.jbar{height:100%;background:var(--blue2);border-radius:4px;transition:width .2s ease;}
+.jtgt{position:absolute;top:-2px;width:2px;height:11px;background:var(--amber);}
+.jv{font-size:12px;color:var(--text);width:60px;text-align:right;flex-shrink:0;}
+.jv.t{color:var(--amber);width:70px;}
+
+.sc-select{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:10px 12px;color:var(--text);font-size:14px;outline:none;font-family:var(--font);margin-bottom:12px;}
+.sm-select,.sm-inp{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 8px;color:var(--text);font-size:13px;outline:none;font-family:var(--font);}
+.sm-inp{width:150px;text-transform:uppercase;}
+
+.btn-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.rb{border:1px solid var(--border2);border-radius:10px;padding:12px 8px;font-size:13px;font-weight:500;cursor:pointer;font-family:var(--font);display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--text);background:var(--bg3);min-height:60px;justify-content:center;transition:transform .08s,opacity .1s;user-select:none;}
+.rb i{font-size:20px;}
+.rb:active{transform:scale(.95);opacity:.75;}
+.rb.home{color:var(--text2);}
+.rb.up{color:var(--blue);}
+.rb.pack{color:var(--purple);}
+.rb.open{color:var(--green);}
+.rb.close{color:var(--amber);}
+.rb.task{background:var(--green2);border-color:var(--green);color:#fff;padding:15px;font-size:14px;font-weight:700;}
+.rb.stop{background:#3d0f0e;border-color:var(--red2);color:var(--red);}
+.rb:disabled{opacity:.35;cursor:not-allowed;transform:none !important;}
+
+.jog-grid{display:flex;flex-direction:column;gap:10px;}
+.jog-item{display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:8px 10px;}
+.jog-item .jn{width:26px;font-weight:700;color:var(--blue);}
+.jog-item input[type=range]{flex:1;accent-color:var(--amber);}
+.jog-item .jv{width:64px;}
+.hold-btn{width:34px;height:34px;border-radius:9px;background:var(--bg4);border:1px solid var(--border2);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+.hold-btn:active{background:var(--blue2);color:#fff;}
+.hold-btn:disabled{opacity:.35;}
+.jlim{font-size:10px;color:var(--text3);width:46px;text-align:center;flex-shrink:0;}
+
+.cart-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.cart-row{display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:8px 10px;}
+.cart-row .ax{width:34px;font-weight:700;color:var(--blue);font-size:13px;}
+.cart-row .fr{flex:1;font-size:10px;color:var(--text3);}
+.cart-btn{width:44px;height:36px;border-radius:9px;background:var(--bg4);border:1px solid var(--border2);color:var(--text);font-size:16px;font-weight:700;cursor:pointer;font-family:var(--font);}
+.cart-btn:active{background:var(--blue2);color:#fff;}
+.cart-btn:disabled{opacity:.35;cursor:not-allowed;}
+
+.lin-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+.lin-row label{font-size:13px;color:var(--text2);white-space:nowrap;}
+.lin-row input[type=range]{flex:1;accent-color:var(--blue2);min-width:120px;}
+.lin-row span{font-size:13px;color:var(--text);min-width:40px;text-align:right;}
+.divider{height:1px;background:var(--border);margin:12px 0;}
+
+.prog{margin-top:12px;}
+.prog-pills{display:flex;gap:4px;margin-bottom:7px;}
+.pill{flex:1;height:5px;background:var(--bg4);border-radius:3px;transition:background .3s;}
+.pill.done{background:var(--green);}
+.pill.active{background:var(--blue);}
+.pill.failed{background:var(--red);}
+.prog-lbl{font-size:12px;color:var(--text2);}
+
+.trace-line{display:flex;gap:8px;align-items:center;padding:6px 10px;border-radius:7px;font-size:12px;color:var(--text2);}
+.trace-line .tt{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text3);}
+.trace-line.active{background:var(--blue2);color:#fff;font-weight:600;}
+.trace-line.active .tt{color:#fff;}
+.trace-line.done{color:var(--green);}
+.trace-line.failed{color:var(--red);}
+
+.req-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+.req{font-size:11px;padding:4px 9px;border-radius:8px;border:1px solid var(--border);font-family:var(--mono);}
+.req.ok{color:var(--green);border-color:var(--green2);}
+.req.miss{color:var(--red);border-color:var(--red2);}
+.teach-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px;}
+.teach-item .tn{font-family:var(--mono);font-weight:700;color:var(--amber);width:110px;}
+.teach-item .tj{flex:1;color:var(--text3);font-family:var(--mono);font-size:11px;}
+
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12px;}
+.kv .k{color:var(--text2);}
+.kv .v{color:var(--text);font-family:var(--mono);}
+table.mon{width:100%;border-collapse:collapse;font-size:12px;}
+table.mon th{color:var(--text2);font-weight:500;text-align:right;padding:4px 6px;border-bottom:1px solid var(--border);}
+table.mon th:first-child,table.mon td:first-child{text-align:left;color:var(--blue);font-weight:700;}
+table.mon td{text-align:right;padding:4px 6px;font-family:var(--mono);}
+table.mon td.err{color:var(--amber);}
+
+.log-area{background:var(--bg);border-radius:9px;padding:12px 14px;font-family:var(--mono);font-size:12px;line-height:1.8;max-height:200px;overflow-y:auto;border:1px solid var(--border);}
+.log-line{display:flex;gap:10px;}
+.lt{color:var(--text3);flex-shrink:0;user-select:none;}
+.lm{color:var(--text2);}
+.lm.ok{color:var(--green);}.lm.err{color:var(--red);}.lm.warn{color:var(--amber);}.lm.info{color:var(--blue);}.lm.sys{color:var(--purple);}
+.log-ctrl{display:flex;gap:6px;}
+.log-btn{background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:6px 13px;color:var(--text2);font-size:12px;cursor:pointer;font-family:var(--font);}
+
+.settings-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);}
+.settings-row:last-child{border-bottom:none;}
+.settings-row .s-lbl{font-size:13px;color:var(--text2);}
+.settings-row .s-lbl small{display:block;font-size:11px;color:var(--text3);}
+.s-inp{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font-size:13px;outline:none;font-family:var(--font);width:220px;text-align:right;}
+.note{font-size:11px;color:var(--text3);}
+.note.warn{color:var(--amber);}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-wrap" id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">M</div>
+    <div class="login-title">Mery6 Robot Control</div>
+    <div class="login-sub">Simülasyon pendant'ı — ROS Noetic / Gazebo / MoveIt</div>
+    <div class="f-label">Kullanıcı adı</div>
+    <input class="f-inp" id="uname" type="text" placeholder="admin" autocomplete="username" autocapitalize="none">
+    <div class="f-label">Şifre</div>
+    <input class="f-inp" id="upass" type="password" placeholder="••••••••" autocomplete="current-password">
+    <button class="login-btn" onclick="doLogin()">Giriş Yap</button>
+    <div class="login-err" id="login-err"></div>
+    <div class="login-hint">Demo: admin / 1234 &nbsp;|&nbsp; operator / robot</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="app" id="app">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="t-logo">M</div>
+      <div>
+        <div class="t-title">Mery6 Robot Control</div>
+        <div class="t-sub" id="ros-sub">ROS Bridge bağlı değil</div>
+      </div>
+      <div class="chips">
+        <div class="chip">DURUM<b id="chip-state">—</b></div>
+        <div class="chip">BRIDGE<b id="chip-bridge">—</b></div>
+        <div class="chip">SPEED<b id="chip-speed">30%</b></div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <input class="ip-inp" id="ip-inp" value="10.114.172.147" placeholder="ROS Bridge IP">
+      <button class="c-btn" id="conn-btn" onclick="toggleConnect()">Bağlan</button>
+      <div class="conn-row"><div class="dot" id="dot"></div><span class="c-lbl" id="c-lbl">Bağlı değil</span></div>
+      <button class="estop-top" id="estop-top-btn" onclick="eStop()">SİM. ACİL DURDUR</button>
+      <div class="user-pill">
+        <div class="avatar" id="av">A</div>
+        <span class="u-name" id="uname-disp">Admin</span>
+        <button class="logout" onclick="doLogout()">Çıkış</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ros-status-bar disconnected" id="ros-bar">
+    <i class="ti ti-wifi-off" id="ros-bar-icon" style="font-size:16px;"></i>
+    <span id="ros-bar-txt">rosbridge_server'a bağlanılmadı — IP girin ve "Bağlan"a basın</span>
+  </div>
+
+  <div class="estop-warn" id="estop-banner">
+    <i class="ti ti-alert-triangle" style="font-size:20px;"></i>
+    SİMÜLASYON E-STOP AKTİF — hareketler iptal edildi, yeni komutlar reddediliyor. (Gerçek bir güvenlik durdurması DEĞİLDİR.) Sıfırlamak için tekrar basın.
+  </div>
+
+  <!-- NAV TABS -->
+  <div class="navtabs">
+    <button class="navtab active" data-page="dashboard" onclick="switchPage('dashboard')"><i class="ti ti-home"></i>Dashboard</button>
+    <button class="navtab" data-page="jog" onclick="switchPage('jog')"><i class="ti ti-arrows-move"></i>Jog</button>
+    <button class="navtab" data-page="run" onclick="switchPage('run')"><i class="ti ti-player-play"></i>Run</button>
+    <button class="navtab" data-page="monitor" onclick="switchPage('monitor')"><i class="ti ti-chart-bar"></i>Monitor</button>
+    <button class="navtab" data-page="settings" onclick="switchPage('settings')"><i class="ti ti-settings"></i>Settings</button>
+  </div>
+
+  <!-- ============ DASHBOARD ============ -->
+  <div class="page active" id="page-dashboard">
+    <div class="grid grid2">
+      <div class="panel">
+        <div class="viewport">
+          <i class="ti ti-robot"></i>
+          <div class="vp-label">mery6 · Gazebo simülasyonu · barista workcell</div>
+          <div class="vp-hint">3D görselleştirme Gazebo/RViz penceresindedir — burası durum özetidir</div>
+        </div>
+        <div class="kv" style="margin-top:12px;">
+          <div class="k">Planlama sahnesi</div><div class="v" id="dash-workcell">—</div>
+          <div class="k">Öğretilen pozlar</div><div class="v" id="dash-taught">—</div>
+          <div class="k">Görev</div><div class="v" id="dash-task">—</div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="p-hdr">
+          <div class="p-title"><i class="ti ti-user"></i>Sistem</div>
+          <span class="badge br" id="state-badge">Bağlantı yok</span>
+        </div>
+        <div class="btn-grid" style="margin-bottom:12px;">
+          <button class="rb" onclick="appendLog('Sayfa yenileniyor...','sys');setTimeout(()=>location.reload(),400);"><i class="ti ti-refresh"></i>Reboot (UI)</button>
+          <button class="rb" onclick="rosDisconnect();appendLog('Bağlantı kesildi (Shutdown)','warn');"><i class="ti ti-power"></i>Shutdown</button>
+          <button class="rb" onclick="doLogout()"><i class="ti ti-logout"></i>Logout</button>
+        </div>
+        <div class="p-title" style="font-size:13px;margin-bottom:6px;"><i class="ti ti-gauge" style="font-size:15px;"></i>Global Hız (MoveIt ölçekleme)</div>
+        <div class="lin-row">
+          <input type="range" min="1" max="100" value="30" id="speed-sl" oninput="onSpeedChange(this.value)" onchange="sendSpeed()">
+          <span id="speed-lbl">30%</span>
+        </div>
+        <div class="stat-grid">
+          <div class="sc"><div class="sc-label">Bridge durumu</div><div class="sc-val" id="sv-state" style="color:var(--text2);">—</div></div>
+          <div class="sc"><div class="sc-label">Gripper <span class="note">(nesne tutulmaz — sim.)</span></div><div class="sc-val" id="sv-gripper" style="color:var(--text2);">—</div></div>
+          <div class="sc"><div class="sc-label">Çarpışma</div><div class="sc-val" id="sv-coll" style="color:var(--text2);">—</div></div>
+          <div class="sc"><div class="sc-label">Son hata</div><div class="sc-val" id="sv-err" style="color:var(--text2);font-size:12px;">—</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="p-hdr"><div class="p-title"><i class="ti ti-adjustments"></i>Eklem Açıları (canlı · <span style="color:var(--amber)">hedef</span>)</div><span class="badge ba" id="joint-badge">Bekleniyor</span></div>
+      <div id="joint-list-dash"></div>
+    </div>
+  </div>
+
+  <!-- ============ JOG ============ -->
+  <div class="page" id="page-jog">
+    <div class="grid grid2">
+      <div class="panel">
+        <div class="p-hdr"><div class="p-title"><i class="ti ti-hand-move"></i>Eklem Jog (J1–J6) — hedef durumu</div>
+          <button class="c-btn" onclick="syncTargetToLive()" title="Hedefi canlı eklem değerlerine eşitle"><i class="ti ti-refresh"></i> Hedef = Canlı</button></div>
+        <div class="jog-grid" id="jog-list"></div>
+        <div class="divider"></div>
+        <div class="lin-row">
+          <label>Jog adımı</label>
+          <select class="sm-select" id="jog-step-sel" onchange="jogStepDeg=parseFloat(this.value)">
+            <option value="0.5">0.5°</option><option value="1">1°</option><option value="2" selected>2°</option><option value="5">5°</option><option value="10">10°</option>
+          </select>
+          <label>Jog Hızı</label>
+          <input type="range" min="1" max="100" value="40" id="jog-speed-sl" oninput="document.getElementById('jog-speed-lbl').textContent=this.value+'%'">
+          <span id="jog-speed-lbl">40%</span>
+        </div>
+        <div class="note warn">Eklem jog MoveIt'i atlar (çarpışma kontrolü YOK) — kolu fiziksel olarak masaya sürebilir. Son yaklaşma için Kartezyen jog kullanın.</div>
+      </div>
+      <div class="panel">
+        <div class="p-hdr"><div class="p-title"><i class="ti ti-route"></i>Planlı hareket (MoveIt)</div><span class="badge bn" id="jog-bridge-badge">bridge —</span></div>
+        <div class="btn-grid" style="margin-bottom:10px;">
+          <button class="rb home" onclick="cmdNamed('HOME')"><i class="ti ti-home"></i>HOME</button>
+          <button class="rb up" onclick="cmdNamed('READY')" id="btn-ready"><i class="ti ti-arrow-up"></i>READY<br><small>(öğretilmiş)</small></button>
+          <button class="rb pack" onclick="cmdGoTarget()"><i class="ti ti-target-arrow"></i>Hedefe git<br><small>(MoveIt)</small></button>
+        </div>
+        <div class="p-title" style="font-size:13px;margin-bottom:6px;"><i class="ti ti-hand-grab" style="font-size:15px;"></i>MC1 Gripper</div>
+        <div class="btn-grid" style="grid-template-columns:1fr 1fr;margin-bottom:10px;">
+          <button class="rb open" onclick="cmdGripper('open')"><i class="ti ti-arrows-horizontal"></i>Aç</button>
+          <button class="rb close" onclick="cmdGripper('close')"><i class="ti ti-arrows-diff"></i>Kapat</button>
+        </div>
+        <div class="kv">
+          <div class="k">Gripper</div><div class="v" id="jog-grip">—</div>
+          <div class="k">Plan</div><div class="v" id="jog-plan">—</div>
+          <div class="k">Yürütme</div><div class="v" id="jog-exec">—</div>
+          <div class="k">TCP</div><div class="v" id="jog-tcp">—</div>
+        </div>
+        <div class="note" style="margin-top:8px;">"Kapalı" = parmaklar kapalı açıya ulaştı; simülasyonda nesnenin tutulduğu doğrulanmaz.</div>
+      </div>
+    </div>
+    <div class="grid grid3">
+      <!-- Cartesian jog (Phase C2) -->
+      <div class="panel">
+        <div class="p-hdr"><div class="p-title"><i class="ti ti-axis-3d"></i>Kartezyen Jog (eef_tcp_link)</div><span class="badge bn" id="cart-badge">—</span></div>
+        <div class="lin-row">
+          <label>Adım XYZ</label>
+          <select class="sm-select" id="cart-step-mm"><option value="1">1 mm</option><option value="5">5 mm</option><option value="10" selected>10 mm</option><option value="20">20 mm</option><option value="50">50 mm</option></select>
+          <label>Adım Rot</label>
+          <select class="sm-select" id="cart-step-deg"><option value="1">1°</option><option value="5" selected>5°</option><option value="15">15°</option><option value="30">30°</option></select>
+        </div>
+        <div class="cart-grid" id="cart-grid"></div>
+        <div class="kv" style="margin-top:10px;"><div class="k">Sonuç</div><div class="v" id="cart-result">—</div></div>
+        <div class="note" style="margin-top:6px;">X/Y/Z: base_link ekseni · Rx/Ry/Rz: takım (tool) ekseni. Her tık = MoveIt doğrusal yol (çarpışma kontrollü) + yürütme. HOME tekil nokta (dirsek+bilek) — önce READY'ye gidin.</div>
+      </div>
+      <!-- Teach (Phase C3) -->
+      <div class="panel">
+        <div class="p-hdr"><div class="p-title"><i class="ti ti-bookmark"></i>Öğretilen pozlar (Teach)</div><span class="badge bn" id="teach-count">0</span></div>
+        <div class="lin-row">
+          <input class="sm-inp" id="teach-name" placeholder="PICK" maxlength="32">
+          <button class="c-btn" onclick="cmdTeach()"><i class="ti ti-bookmark-plus"></i> Teach (mevcut poz)</button>
+        </div>
+        <div id="teach-list"><div class="note">Henüz öğretilmiş poz yok.</div></div>
+        <div class="note" style="margin-top:8px;">Barista için gerekli: READY, PRE_PICK, PICK, PRE_PLACE, PLACE. Öneri sırası: PICK → Kartezyen +Z 50–80 mm → PRE_PICK → PLACE → +Z → PRE_PLACE → READY (masa üstünde, tekil olmayan poz).</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ RUN ============ -->
+  <div class="page" id="page-run">
+    <div class="grid grid2">
+      <div class="panel">
+        <div class="viewport">
+          <i class="ti ti-robot"></i>
+          <div class="vp-label" id="run-status-label">Stopped</div>
+        </div>
+        <div class="kv" style="margin-top:12px;">
+          <div class="k">Görev</div><div class="v" id="run-task-name">—</div>
+          <div class="k">Adım</div><div class="v" id="run-step">—</div>
+          <div class="k">Durum</div><div class="v" id="run-state">—</div>
+          <div class="k">Çevrim süresi</div><div class="v" id="run-cycle">—</div>
+          <div class="k">Son sonuç</div><div class="v" id="run-result">—</div>
+          <div class="k">Çevrim sayısı</div><div class="v" id="run-count">—</div>
+        </div>
+        <div class="note warn" style="margin-top:10px;">Simülasyon sınırı: tutma (grasp) plugin'i yok — PICK'te parmaklar kapanır ama fincan gripper'a bağlanmaz; TRANSFER boş gripper ile yapılır.</div>
+      </div>
+      <div class="panel">
+        <div class="p-hdr"><div class="p-title"><i class="ti ti-list-check"></i>Program Seç</div></div>
+        <select class="sc-select" id="scenario-sel" onchange="onScenarioChange()">
+          <option value="">— görev yüklenmedi (bridge bekleniyor) —</option>
+        </select>
+        <div class="note" style="margin-bottom:4px;">Gerekli öğretilmiş pozlar:</div>
+        <div class="req-list" id="req-list"><span class="note">—</span></div>
+        <div id="trace-list" style="margin-bottom:12px;"></div>
+        <div class="btn-grid" style="grid-template-columns:2fr 1fr;">
+          <button class="rb task" id="task-btn" onclick="startTask()"><i class="ti ti-player-play"></i>Görevi Çalıştır</button>
+          <button class="rb stop" id="task-stop-btn" onclick="stopTask()"><i class="ti ti-player-stop"></i>Durdur</button>
+        </div>
+        <div class="prog">
+          <div class="prog-pills" id="prog-pills"></div>
+          <div class="prog-lbl" id="prog-lbl">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MONITOR ============ -->
+  <div class="page" id="page-monitor">
+    <div class="panel">
+      <div class="p-hdr"><div class="p-title"><i class="ti ti-table"></i>Eklem Durumu (canlı / hedef / hata / hız / tork)</div><span class="badge bn" id="mon-state">—</span></div>
+      <table class="mon"><thead><tr><th>Eklem</th><th>Canlı °</th><th>Hedef °</th><th>Hata °</th><th>Hız °/s</th><th>Tork Nm</th><th>Sınır °</th></tr></thead><tbody id="mon-rows"></tbody></table>
+    </div>
+    <div class="grid grid3">
+      <div class="panel">
+        <div class="p-hdr"><div class="p-title"><i class="ti ti-3d-cube-sphere"></i>TCP Pozu (eef_tcp_link, base_link)</div></div>
+        <div class="kv" id="mon-tcp"><div class="k">—</div><div class="v">bridge bekleniyor</div></div>
+      </div>
+      <div class="panel">
+        <div class="p-hdr"><div class="p-title"><i class="ti ti-activity"></i>Planlama / Yürütme / Çarpışma / Görev</div></div>
+        <div class="kv" id="mon-plan"><div class="k">—</div><div class="v">bridge bekleniyor</div></div>
+      </div>
+    </div>
+    <div class="grid grid3">
+      <div class="panel">
+        <div class="p-hdr"><div class="p-title"><i class="ti ti-activity"></i>Eklem Hızı (°/s)</div></div>
+        <div id="vel-bars"></div>
+      </div>
+      <div class="panel">
+        <div class="p-hdr"><div class="p-title"><i class="ti ti-bolt"></i>Eklem Torku (Nm — varsa)</div></div>
+        <div id="eff-bars"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="p-hdr"><div class="p-title"><i class="ti ti-terminal"></i>Sistem Logu</div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <span class="badge bb" id="log-badge">0 satır</span>
+          <div class="log-ctrl"><button class="log-btn" onclick="clearLog()">Temizle</button><button class="log-btn" onclick="exportLog()">Dışa Aktar</button></div>
+        </div>
+      </div>
+      <div class="log-area" id="log-area"></div>
+    </div>
+  </div>
+
+  <!-- ============ SETTINGS ============ -->
+  <div class="page" id="page-settings">
+    <div class="panel">
+      <div class="p-hdr"><div class="p-title"><i class="ti ti-plug"></i>ROS Bağlantı Ayarları</div></div>
+      <div class="settings-row">
+        <div class="s-lbl">Trajectory topic <small>Jog komutlarının gittiği kontrolcü topic'i</small></div>
+        <input class="s-inp" id="set-traj-topic" value="/orion_arm_pos_joint_traj_controller/command">
+      </div>
+      <div class="settings-row">
+        <div class="s-lbl">Joint states topic <small>Canlı eklem açılarının okunduğu topic</small></div>
+        <input class="s-inp" id="set-js-topic" value="/joint_states">
+      </div>
+      <div class="settings-row">
+        <div class="s-lbl">Pendant komut topic <small>pendant_bridge.py (std_msgs/String JSON)</small></div>
+        <input class="s-inp" id="set-cmd-topic" value="/pendant/cmd">
+      </div>
+      <div class="settings-row">
+        <div class="s-lbl">Pendant durum topic</div>
+        <input class="s-inp" id="set-status-topic" value="/pendant/status">
+      </div>
+      <div class="settings-row">
+        <div class="s-lbl">Eklem isimleri (virgülle) <small>URDF'deki joint adları, sırayla</small></div>
+        <input class="s-inp" id="set-joint-names" value="joint_1,joint_2,joint_3,joint_4,joint_5,joint_6" style="width:280px;">
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;">
+        <button class="c-btn" onclick="applySettings()">Kaydet ve Yeniden Bağlan</button>
+        <button class="c-btn" onclick="pendantCmd({cmd:'reload_workcell'})">Planlama sahnesini yeniden yükle</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="p-hdr"><div class="p-title"><i class="ti ti-info-circle"></i>Sistem Bilgisi</div></div>
+      <div class="settings-row"><div class="s-lbl">Arayüz</div><div>Mery6 MCUI (HTML/roslibjs) — simülasyon pendant'ı</div></div>
+      <div class="settings-row"><div class="s-lbl">Sürüm</div><div>3.0.0 (Faz C)</div></div>
+      <div class="settings-row"><div class="s-lbl">Mimari</div><div>Pendant → rosbridge → pendant_bridge/MoveIt → FollowJointTrajectory → Gazebo</div></div>
+      <div class="settings-row"><div class="s-lbl">Eklem sınırları</div><div id="set-limits">—</div></div>
+      <div class="settings-row"><div class="s-lbl">Sınırlamalar (bridge)</div><div id="set-limitations" style="font-size:12px;color:var(--text2);">—</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ════════════════════════════════════════════
+//  Sabitler / ayarlanabilir durum
+// ════════════════════════════════════════════
+const USERS = { admin: "1234", operator: "robot" };
+
+let JOINT_NAMES = ["joint_1","joint_2","joint_3","joint_4","joint_5","joint_6"];
+let TRAJ_TOPIC   = "/orion_arm_pos_joint_traj_controller/command";
+let JS_TOPIC     = "/joint_states";
+let CMD_TOPIC    = "/pendant/cmd";
+let STATUS_TOPIC = "/pendant/status";
+const INFO_TOPIC = "/pendant/robot_info";
+
+const JOG_MAX_VEL_DPS = 90;         // jog speed slider 100% => 90 deg/s (URDF max 1.57 rad/s)
+const BRIDGE_TIMEOUT_MS = 1500;     // bridge considered dead if no status for this long
+const CART_AXES = [['x','X','base_link'],['y','Y','base_link'],['z','Z','base_link'],['rx','Rx','tool'],['ry','Ry','tool'],['rz','Rz','tool']];
+
+// Fallback limits (deg) if /pendant/robot_info is not available: URDF orion5_v166_arm.xacro
+const FALLBACK_LIMITS = [[-179.9,179.9],[-179.9,179.9],[-160.4,160.4],[-179.9,179.9],[-179.9,179.9],[-179.9,179.9]];
+
+// ════════════════════════════════════════════
+//  Durum
+//   jointDegsLive/VelLive/EffLive : SADECE /joint_states callback'i yazar
+//   jointTargetDegs               : pendant'ın komutladığı hedef (UI yazar)
+// ════════════════════════════════════════════
+let currentUser=null, ros=null, trajPub=null, cmdPub=null, jointSub=null, statusSub=null, infoSub=null;
+let rosConnected=false, eStopActive=false;
+let logLines=[];
+let jointDegsLive=[0,0,0,0,0,0], jointVelLive=[0,0,0,0,0,0], jointEffLive=[0,0,0,0,0,0];
+let jointTargetDegs=[0,0,0,0,0,0], targetInitialized=false;
+let jointLimits = FALLBACK_LIMITS.map(l=>l.slice());
+let robotInfo=null, bridgeStatus=null, bridgeLastMs=0, bridgeAlive=false;
+let speedPercent = 30;
+let jogStepDeg = 2;
+let jogTimers = {};
+let lastSliderSend = 0;
+let cmdSeq = 0;
+let lastReachedStamp = null;
+let selectedTask = "";
+let pendingCmdId = null;            // Cartesian jog latch: one jog in flight at a time
+
+// ════════════════════════════════════════════
+//  Login
+// ════════════════════════════════════════════
+function doLogin(){
+  const u=document.getElementById('uname').value.trim();
+  const p=document.getElementById('upass').value;
+  if(USERS[u]&&USERS[u]===p){
+    currentUser=u;
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app').style.display='flex';
+    document.getElementById('av').textContent=u[0].toUpperCase();
+    document.getElementById('uname-disp').textContent=u.charAt(0).toUpperCase()+u.slice(1);
+    buildJointUI();
+    buildCartUI();
+    buildTraceList([]);
+    appendLog('Giriş yapıldı: '+u,'sys');
+    appendLog('ROS Bridge IP girin ve "Bağlan"a basın','info');
+  } else {
+    document.getElementById('login-err').textContent='Kullanıcı adı veya şifre hatalı.';
+  }
+}
+document.addEventListener('keydown', e=>{ if(e.key==='Enter' && document.getElementById('login-screen').style.display!=='none') doLogin(); });
+
+function doLogout(){
+  rosDisconnect();
+  currentUser=null;
+  document.getElementById('app').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('upass').value='';
+  document.getElementById('login-err').textContent='';
+  logLines=[];
+}
+
+function switchPage(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.querySelectorAll('.navtab').forEach(t=>t.classList.toggle('active', t.dataset.page===name));
+}
+
+function applySettings(){
+  TRAJ_TOPIC   = document.getElementById('set-traj-topic').value.trim() || TRAJ_TOPIC;
+  JS_TOPIC     = document.getElementById('set-js-topic').value.trim() || JS_TOPIC;
+  CMD_TOPIC    = document.getElementById('set-cmd-topic').value.trim() || CMD_TOPIC;
+  STATUS_TOPIC = document.getElementById('set-status-topic').value.trim() || STATUS_TOPIC;
+  const names = document.getElementById('set-joint-names').value.split(',').map(s=>s.trim()).filter(Boolean);
+  if(names.length===6) JOINT_NAMES = names;
+  appendLog('Ayarlar kaydedildi — yeniden bağlanılıyor...','sys');
+  if(rosConnected){ rosDisconnect(); setTimeout(rosConnect, 400); }
+}
+
+// ════════════════════════════════════════════
+//  ROS Bridge bağlantısı
+// ════════════════════════════════════════════
+function toggleConnect(){ rosConnected ? rosDisconnect() : rosConnect(); }
+
+function rosConnect(){
+  const ip = document.getElementById('ip-inp').value.trim() || '192.168.1.100';
+  const url = 'ws://'+ip+':9090';
+  setRosBar('connecting','Bağlanılıyor: '+url+' ...');
+  appendLog('WebSocket açılıyor: '+url,'info');
+  if(ros){ try{ros.close();}catch(e){} }
+  ros = new ROSLIB.Ros({url:url});
+
+  ros.on('connection', function(){
+    rosConnected=true; targetInitialized=false; pendingCmdId=null;
+    setRosBar('connected','rosbridge_server bağlı: '+url);
+    document.getElementById('dot').className='dot on';
+    document.getElementById('c-lbl').textContent='Bağlı';
+    document.getElementById('conn-btn').textContent='Kes';
+    setStateBadge('ready');
+    appendLog('ROS Bridge bağlantısı kuruldu','ok');
+
+    trajPub = new ROSLIB.Topic({ros:ros, name:TRAJ_TOPIC, messageType:'trajectory_msgs/JointTrajectory'});
+    cmdPub  = new ROSLIB.Topic({ros:ros, name:CMD_TOPIC,  messageType:'std_msgs/String'});
+
+    jointSub = new ROSLIB.Topic({ros:ros, name:JS_TOPIC, messageType:'sensor_msgs/JointState', throttle_rate:100, queue_length:1});
+    jointSub.subscribe(onJointStates);
+
+    statusSub = new ROSLIB.Topic({ros:ros, name:STATUS_TOPIC, messageType:'std_msgs/String', queue_length:1});
+    statusSub.subscribe(m=>{ try{ onBridgeStatus(JSON.parse(m.data)); }catch(e){ console.warn(e); } });
+
+    infoSub = new ROSLIB.Topic({ros:ros, name:INFO_TOPIC, messageType:'std_msgs/String'});
+    infoSub.subscribe(m=>{ try{ onRobotInfo(JSON.parse(m.data)); }catch(e){ console.warn(e); } });
+    setTimeout(()=>{ if(rosConnected && !robotInfo) pendantCmd({cmd:'get_info'}, true); }, 1500);
+  });
+
+  ros.on('error', function(err){
+    appendLog('WebSocket hatası: '+(err.message||err),'err');
+    setRosBar('disconnected','Bağlantı hatası — PC açık mı? rosbridge çalışıyor mu?');
+  });
+
+  ros.on('close', function(){
+    rosConnected=false; trajPub=null; cmdPub=null; bridgeAlive=false; pendingCmdId=null;
+    [jointSub,statusSub,infoSub].forEach(s=>{ if(s){ try{s.unsubscribe();}catch(e){} } });
+    jointSub=statusSub=infoSub=null;
+    Object.keys(jogTimers).forEach(k=>jogJointStop(k));
+    document.getElementById('dot').className='dot';
+    document.getElementById('c-lbl').textContent='Bağlı değil';
+    document.getElementById('conn-btn').textContent='Bağlan';
+    document.getElementById('joint-badge').className='badge ba';
+    document.getElementById('joint-badge').textContent='Bekleniyor';
+    setStateBadge('disconnected');
+    setRosBar('disconnected','Bağlantı kesildi');
+    updateBridgeChip();
+    appendLog('ROS Bridge bağlantısı kesildi','warn');
+  });
+}
+function rosDisconnect(){ if(ros){ try{ros.close();}catch(e){} ros=null; } }
+
+// ════════════════════════════════════════════
+//  /joint_states → SADECE canlı değerler
+// ════════════════════════════════════════════
+function onJointStates(msg){
+  let gotAll=true;
+  JOINT_NAMES.forEach(function(jn, idx){
+    const i = msg.name.indexOf(jn);
+    if(i!==-1){
+      jointDegsLive[idx] = +(msg.position[i]*180/Math.PI).toFixed(2);
+      if(msg.velocity && msg.velocity[i]!==undefined) jointVelLive[idx] = +(msg.velocity[i]*180/Math.PI).toFixed(1);
+      if(msg.effort && msg.effort[i]!==undefined) jointEffLive[idx] = +(msg.effort[i]).toFixed(2);
+    } else gotAll=false;
+  });
+  if(!targetInitialized && gotAll){
+    jointTargetDegs = jointDegsLive.slice();
+    targetInitialized=true;
+    appendLog('Hedef eklem değerleri ilk /joint_states mesajından alındı: ['+jointTargetDegs.map(v=>v.toFixed(1)).join(', ')+']','sys');
+  }
+  renderAll();
+  document.getElementById('joint-badge').className='badge bg';
+  document.getElementById('joint-badge').textContent='Canlı';
+}
+
+function syncTargetToLive(){
+  if(!targetInitialized){ appendLog('Henüz /joint_states alınmadı','warn'); return; }
+  jointTargetDegs = jointDegsLive.slice();
+  renderAll();
+  appendLog('Hedef = canlı eklem değerleri','sys');
+}
+
+// ════════════════════════════════════════════
+//  Bridge: robot_info / status
+// ════════════════════════════════════════════
+function onRobotInfo(info){
+  const first = !robotInfo;
+  robotInfo = info;
+  if(info.joints && info.joints.length===6){
+    const lim = info.joints.map(j=>[j.min_deg, j.max_deg]);
+    if(JSON.stringify(lim)!==JSON.stringify(jointLimits)){
+      jointLimits = lim;
+      appendLog('URDF eklem sınırları alındı: '+info.joints.map(j=>j.name.replace('joint_','J')+' ['+j.min_deg+'°, '+j.max_deg+'°]').join('  '),'sys');
+      document.getElementById('set-limits').textContent = info.joints.map(j=>j.name.replace('joint_','J')+' ['+j.min_deg+', '+j.max_deg+']').join('  ');
+      buildJointUI(); renderAll();
+    }
+  }
+  // tasks (shape: tasks[name] = [step names])
+  const sel=document.getElementById('scenario-sel');
+  const names=Object.keys(info.tasks||{});
+  const prev=selectedTask;
+  sel.innerHTML = names.length ? names.map(n=>`<option value="${n}">${n} (${info.tasks[n].length} adım)</option>`).join('')
+                               : '<option value="">— görev tanımlı değil —</option>';
+  selectedTask = names.includes(prev) ? prev : (names[0]||"");
+  sel.value = selectedTask;
+  renderTaskRequirements();
+  if(!(bridgeStatus && bridgeStatus.task && bridgeStatus.task.running))
+    buildTraceList(selectedTask ? info.tasks[selectedTask].map(n=>({name:n,state:'pending'})) : []);
+  renderTeachList();
+  document.getElementById('dash-workcell').textContent = (info.workcell_loaded||[]).join(', ') || 'yok';
+  document.getElementById('dash-taught').textContent = Object.keys(info.taught_poses||{}).join(', ') || 'yok';
+  document.getElementById('dash-task').textContent = names.join(', ') || 'yok';
+  document.getElementById('set-limitations').innerHTML = (info.limitations||[]).map(l=>'• '+escapeHtml(l)).join('<br>') || '—';
+  document.getElementById('btn-ready').disabled = !(info.taught_poses && info.taught_poses.READY);
+  if(first){
+    appendLog('Planlama sahnesi: '+((info.workcell_loaded||[]).join(', ')||'boş'),'sys');
+    if(info.estop_is_simulation_only) appendLog('Not: E-STOP yalnızca simülasyon durdurmasıdır (güvenlik sınıfı değildir).','warn');
+    appendLog('Not: gripper tutma simüle edilmez (fincan gripper\'a bağlanmaz).','warn');
+  }
+}
+
+function renderTeachList(){
+  const tp = (robotInfo && robotInfo.taught_poses) || {};
+  const names = Object.keys(tp);
+  document.getElementById('teach-count').textContent = names.length;
+  document.getElementById('teach-list').innerHTML = names.length ? names.map(n=>{
+    const r=tp[n]; const j=(r.joints_deg||[]).map(v=>(+v).toFixed(1)).join(', '); const t=r.tcp||{};
+    return `<div class="teach-item"><span class="tn">${escapeHtml(n)}</span><span class="tj">[${j}]  tcp ${t.x!=null?(+t.x).toFixed(3)+', '+(+t.y).toFixed(3)+', '+(+t.z).toFixed(3):'—'}</span>
+      <button class="c-btn sm" onclick="cmdNamed('${escapeHtml(n)}')"><i class="ti ti-player-play"></i> Git</button>
+      <button class="c-btn sm danger" onclick="cmdDeleteTaught('${escapeHtml(n)}')"><i class="ti ti-trash"></i></button></div>`;
+  }).join('') : '<div class="note">Henüz öğretilmiş poz yok.</div>';
+}
+
+function renderTaskRequirements(){
+  const req = (robotInfo && robotInfo.task_requirements && robotInfo.task_requirements[selectedTask]) || {required:[],missing:[]};
+  const el=document.getElementById('req-list');
+  el.innerHTML = req.required.length ? req.required.map(p=>`<span class="req ${req.missing.includes(p)?'miss':'ok'}">${req.missing.includes(p)?'✗':'✓'} ${escapeHtml(p)}</span>`).join('') : '<span class="note">—</span>';
+  updateTaskButton();
+}
+function taskReady(){
+  const req = (robotInfo && robotInfo.task_requirements && robotInfo.task_requirements[selectedTask]);
+  return !!selectedTask && !!req && req.missing.length===0;
+}
+function updateTaskButton(){
+  const running = bridgeStatus && bridgeStatus.task && bridgeStatus.task.running;
+  document.getElementById('task-btn').disabled = !taskReady() || !!running || eStopActive || !bridgeAlive;
+}
+
+function onBridgeStatus(st){
+  bridgeStatus = st; bridgeLastMs = Date.now();
+  if(!bridgeAlive){ bridgeAlive=true; appendLog('pendant_bridge bağlı','ok'); }
+  updateBridgeChip();
+
+  if(st.estop && !eStopActive){ eStopActive=true; showEstop(true); }
+  if(!st.estop && eStopActive && st.state!=='ESTOP'){ eStopActive=false; showEstop(false); }
+
+  if(st.state==='TARGET_REACHED' && st.stamp!==lastReachedStamp && Object.keys(jogTimers).every(k=>!jogTimers[k])){
+    lastReachedStamp = st.stamp;
+    if(st.live_deg) { jointTargetDegs = st.live_deg.slice(); renderAll(); }
+  }
+  if(st.last_cmd && st.last_cmd.id && st.last_cmd.id!==onBridgeStatus._lastId && st.last_cmd.result && st.last_cmd.result!=='queued'){
+    onBridgeStatus._lastId = st.last_cmd.id;
+    const r=st.last_cmd.result;
+    appendLog('['+st.last_cmd.cmd+'] → '+r+(st.last_cmd.message?' — '+st.last_cmd.message:''), r==='ok'?'ok':(r==='rejected'||r==='error'?'err':'warn'));
+    if(st.last_cmd.id===pendingCmdId){ pendingCmdId=null; setCartEnabled(); }
+    if(st.last_cmd.cmd==='cartesian_jog') document.getElementById('cart-result').textContent = r+(st.last_cmd.message?' — '+st.last_cmd.message:'')+(st.plan&&st.plan.fraction!=null?'  (frac '+st.plan.fraction+')':'');
+  }
+  if(st.last_error && st.last_error!==onBridgeStatus._lastErr){ onBridgeStatus._lastErr=st.last_error; if(st.state==='FAILED') appendLog('Hata: '+st.last_error,'err'); }
+
+  // dashboard
+  setStateBadge(bridgeStateToBadge(st));
+  document.getElementById('sv-state').textContent = st.state;
+  document.getElementById('sv-state').style.color = st.state==='FAILED'||st.state==='ESTOP' ? 'var(--red)' : (st.state==='EXECUTING'||st.state==='PLANNING' ? 'var(--amber)' : 'var(--green)');
+  const g=st.gripper||{};
+  document.getElementById('sv-gripper').textContent = (g.state||'—')+(g.angle_deg!=null?' '+g.angle_deg+'°':'');
+  const c=st.collision||{};
+  document.getElementById('sv-coll').textContent = c.valid===null||c.valid===undefined ? '—' : (c.valid ? 'Yok' : 'ÇARPIŞMA');
+  document.getElementById('sv-coll').style.color = c.valid===false ? 'var(--red)' : 'var(--green)';
+  document.getElementById('sv-coll').title = (c.contacts||[]).join(', ');
+  document.getElementById('sv-err').textContent = st.last_error || '—';
+  document.getElementById('chip-state').textContent = st.state;
+
+  // jog page
+  document.getElementById('jog-grip').textContent = (g.state||'—')+(g.angle_deg!=null?' ('+g.angle_deg+'°)':'')+(g.reached===false?' — ULAŞILAMADI':'');
+  const p=st.plan||{};
+  document.getElementById('jog-plan').textContent = p.ok===null||p.ok===undefined ? '—' : (p.ok?'OK':'BAŞARISIZ')+' · '+(p.planner||'')+' · '+(p.time_s!=null?p.time_s+'s':'')+(p.traj_duration_s!=null?' · traj '+p.traj_duration_s+'s':'')+(p.fraction!=null?' · frac '+p.fraction:'')+(p.error_code?' · '+p.error_code:'');
+  const x=st.exec||{};
+  document.getElementById('jog-exec').textContent = x.goal_status ? x.goal_status+' · '+(x.elapsed_s!=null?x.elapsed_s+'s':'')+(x.timeout_s!=null?' / '+x.timeout_s+'s':'') : '—';
+  document.getElementById('jog-tcp').textContent = fmtTcp(st.tcp);
+  const busyCls = st.state==='ESTOP'||st.state==='FAILED'?'br':st.state==='EXECUTING'||st.state==='PLANNING'?'ba':'bg';
+  document.getElementById('jog-bridge-badge').className='badge '+busyCls;
+  document.getElementById('jog-bridge-badge').textContent='bridge: '+st.state;
+  document.getElementById('cart-badge').className='badge '+busyCls;
+  document.getElementById('cart-badge').textContent= pendingCmdId ? 'jog sürüyor' : st.state;
+  setCartEnabled();
+
+  // run page
+  const t=st.task||{};
+  document.getElementById('run-task-name').textContent = t.name||'—';
+  document.getElementById('run-step').textContent = t.step_index>=0 ? (t.step_index+1)+'/'+t.step_count+' — '+(t.step_name||'') : '—';
+  document.getElementById('run-state').textContent = st.state;
+  document.getElementById('run-cycle').textContent = t.running ? t.cycle_time_s+' s' : (t.last_cycle_time_s!=null ? t.last_cycle_time_s+' s (son)' : '—');
+  document.getElementById('run-result').textContent = t.result ? t.result+(t.message?' — '+t.message:'') : '—';
+  document.getElementById('run-count').textContent = t.count!=null ? t.count : '—';
+  document.getElementById('run-status-label').textContent = t.running ? 'Running' : 'Stopped';
+  if(t.steps && t.steps.length && (t.name===selectedTask || t.running)) buildTraceList(t.steps);
+  document.getElementById('prog-lbl').textContent = t.running ? 'Adım '+(t.step_index+1)+'/'+t.step_count+' — '+(t.step_name||'')+' ['+st.state+']' : (t.result ? 'Son görev: '+t.result+(t.last_cycle_time_s!=null?' · '+t.last_cycle_time_s+' s':'') : '—');
+  updateTaskButton();
+
+  renderMonitor(st);
+}
+
+function updateBridgeChip(){
+  const alive = rosConnected && (Date.now()-bridgeLastMs) < BRIDGE_TIMEOUT_MS;
+  if(bridgeAlive && !alive){ bridgeAlive=false; pendingCmdId=null; appendLog('pendant_bridge yanıt vermiyor — planlı hareket/görev kullanılamaz, jog çalışmaya devam eder','warn'); setCartEnabled(); updateTaskButton(); }
+  bridgeAlive = alive;
+  const el=document.getElementById('chip-bridge');
+  el.textContent = alive ? 'OK' : 'YOK';
+  el.style.color = alive ? 'var(--green)' : 'var(--red)';
+}
+setInterval(updateBridgeChip, 500);
+
+function bridgeStateToBadge(st){
+  if(st.estop||st.state==='ESTOP') return 'estop';
+  switch(st.state){
+    case 'PLANNING': return 'planning';
+    case 'EXECUTING': return 'running';
+    case 'TARGET_REACHED': return 'done';
+    case 'FAILED': return 'failed';
+    case 'STOPPED': return 'stopped';
+    default: return rosConnected?'ready':'disconnected';
+  }
+}
+function fmtTcp(tcp){
+  if(!tcp) return '—';
+  return 'x '+tcp.x.toFixed(3)+'  y '+tcp.y.toFixed(3)+'  z '+tcp.z.toFixed(3)+' m   R '+tcp.roll.toFixed(1)+'  P '+tcp.pitch.toFixed(1)+'  Y '+tcp.yaw.toFixed(1)+'°';
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ════════════════════════════════════════════
+//  Komut gönderme
+// ════════════════════════════════════════════
+function pendantCmd(obj, quiet){
+  if(!rosConnected || !cmdPub){ appendLog('Bağlantı yok — önce ROS Bridge\'e bağlanın','err'); return null; }
+  if(!bridgeAlive && obj.cmd!=='get_info'){ appendLog('pendant_bridge çalışmıyor — komut gönderilmedi ('+obj.cmd+')','err'); return null; }
+  obj.id = 'c'+(++cmdSeq);
+  cmdPub.publish(new ROSLIB.Message({data: JSON.stringify(obj)}));
+  if(!quiet) appendLog('→ bridge: '+JSON.stringify(obj),'info');
+  return obj.id;
+}
+function bridgeBusy(){
+  return bridgeStatus && (bridgeStatus.state==='PLANNING' || bridgeStatus.state==='EXECUTING' || (bridgeStatus.task && bridgeStatus.task.running));
+}
+
+// Jog / slider: doğrudan trajectory kontrolcüsüne (hızlı yol, bridge gerekmez)
+function sendJointTarget(degreesList, durationSec){
+  if(!rosConnected || !trajPub){ appendLog('Bağlantı yok — önce ROS Bridge\'e bağlanın','err'); return false; }
+  if(eStopActive){ appendLog('E-STOP aktif — komut reddedildi','err'); return false; }
+  const positions = degreesList.map(d=>d*Math.PI/180);
+  const msg = new ROSLIB.Message({
+    joint_names: JOINT_NAMES,
+    points: [{ positions:positions, velocities:[0,0,0,0,0,0], accelerations:[0,0,0,0,0,0],
+      time_from_start:{secs:Math.floor(durationSec), nsecs:Math.round((durationSec%1)*1e9)} }]
+  });
+  trajPub.publish(msg);
+  return true;
+}
+
+// ════════════════════════════════════════════
+//  Eklem sınırları
+// ════════════════════════════════════════════
+function clampToLimit(i, v){
+  const [lo,hi]=jointLimits[i];
+  if(v<lo){ appendLog('J'+(i+1)+' alt sınır ('+lo+'°) — '+v.toFixed(1)+'° kırpıldı','warn'); return lo; }
+  if(v>hi){ appendLog('J'+(i+1)+' üst sınır ('+hi+'°) — '+v.toFixed(1)+'° kırpıldı','warn'); return hi; }
+  return v;
+}
+
+// ════════════════════════════════════════════
+//  Eklem Jog (basılı tutarak, hedef durum üzerinden)
+// ════════════════════════════════════════════
+function jogAllowed(){
+  if(!rosConnected){ appendLog('Bağlantı yok','err'); return false; }
+  if(eStopActive){ appendLog('E-STOP aktif — jog reddedildi','err'); return false; }
+  if(!targetInitialized){ appendLog('Henüz /joint_states alınmadı — jog reddedildi','err'); return false; }
+  if(bridgeBusy() || pendingCmdId){ appendLog('Planlı hareket/görev sürüyor — jog reddedildi','warn'); return false; }
+  return true;
+}
+function jogJointStart(i, dir){
+  if(jogTimers[i]) return;
+  if(!jogAllowed()) return;
+  const step = jogStepDeg;
+  const speedDps = Math.max(1, parseInt(document.getElementById('jog-speed-sl').value))/100*JOG_MAX_VEL_DPS;
+  const dur = Math.max(0.15, step/speedDps);
+  const tick = ()=>{
+    const next = clampToLimit(i, jointTargetDegs[i] + dir*step);
+    if(next===jointTargetDegs[i]){ jogJointStop(i); return; }
+    jointTargetDegs[i] = +next.toFixed(3);
+    sendJointTarget(jointTargetDegs.slice(), dur);
+    renderAll();
+  };
+  tick();
+  jogTimers[i] = setInterval(tick, Math.round(dur*1000));
+}
+function jogJointStop(i){ if(jogTimers[i]){ clearInterval(jogTimers[i]); jogTimers[i]=null; } }
+
+function onJogSlider(i,val){
+  if(!jogAllowed()){ renderAll(); return; }
+  const v = clampToLimit(i, parseFloat(val));
+  const delta = Math.abs(v - jointTargetDegs[i]);
+  jointTargetDegs[i]=v;
+  const now=Date.now();
+  if(now-lastSliderSend<100){ renderAll(); return; }
+  lastSliderSend=now;
+  const speedDps = Math.max(1, parseInt(document.getElementById('jog-speed-sl').value))/100*JOG_MAX_VEL_DPS;
+  sendJointTarget(jointTargetDegs.slice(), Math.max(0.3, delta/speedDps));
+  renderAll();
+}
+function onJogSliderRelease(i){
+  if(!jogAllowed()) return;
+  const speedDps = Math.max(1, parseInt(document.getElementById('jog-speed-sl').value))/100*JOG_MAX_VEL_DPS;
+  const delta = Math.abs(jointTargetDegs[i]-jointDegsLive[i]);
+  sendJointTarget(jointTargetDegs.slice(), Math.max(0.3, delta/speedDps));
+}
+
+// ════════════════════════════════════════════
+//  Kartezyen Jog (bridge → MoveIt compute_cartesian_path)
+// ════════════════════════════════════════════
+function buildCartUI(){
+  document.getElementById('cart-grid').innerHTML = CART_AXES.map(([ax,lbl,fr])=>`
+    <div class="cart-row"><span class="ax">${lbl}</span>
+      <button class="cart-btn" id="cart-${ax}-m" onclick="cartJog('${ax}',-1)">−</button>
+      <button class="cart-btn" id="cart-${ax}-p" onclick="cartJog('${ax}',1)">+</button>
+      <span class="fr">${fr}</span></div>`).join('');
+  setCartEnabled();
+}
+function cartAllowed(){ return rosConnected && bridgeAlive && !eStopActive && !bridgeBusy() && !pendingCmdId && Object.keys(jogTimers).every(k=>!jogTimers[k]); }
+function setCartEnabled(){
+  const ok = cartAllowed();
+  CART_AXES.forEach(([ax])=>{ ['m','p'].forEach(s=>{ const b=document.getElementById('cart-'+ax+'-'+s); if(b) b.disabled=!ok; }); });
+}
+function cartJog(axis, sign){
+  if(!cartAllowed()){ appendLog('Kartezyen jog şu an mümkün değil (bridge meşgul / E-STOP / önceki jog sürüyor)','warn'); return; }
+  const rot = axis.startsWith('r');
+  const step = rot ? parseFloat(document.getElementById('cart-step-deg').value) : parseFloat(document.getElementById('cart-step-mm').value)/1000;
+  const delta = +(sign*step).toFixed(4);
+  document.getElementById('cart-result').textContent = 'planlanıyor...';
+  const id = pendantCmd({cmd:'cartesian_jog', axis:axis, delta:delta, speed:speedPercent});
+  if(id){ pendingCmdId=id; setCartEnabled(); setTimeout(()=>{ if(pendingCmdId===id){ pendingCmdId=null; setCartEnabled(); } }, 20000); }
+}
+
+// ════════════════════════════════════════════
+//  Planlı hareketler / Teach / Gripper (bridge)
+// ════════════════════════════════════════════
+function cmdNamed(name){ if(eStopActive){appendLog('E-STOP aktif','err');return;} appendLog(name+' pozisyonuna MoveIt ile gidiliyor...','sys'); pendantCmd({cmd:'move_named', name:name, speed:speedPercent}); }
+function cmdGoTarget(){
+  if(eStopActive){appendLog('E-STOP aktif','err');return;}
+  if(!targetInitialized){ appendLog('Hedef henüz başlatılmadı','err'); return; }
+  pendantCmd({cmd:'move_joints', deg: jointTargetDegs.map(v=>+v.toFixed(2)), speed:speedPercent});
+}
+function cmdTeach(){
+  const name=document.getElementById('teach-name').value.trim().toUpperCase();
+  if(!/^[A-Z][A-Z0-9_]{0,31}$/.test(name)){ appendLog('Poz adı: büyük harf/rakam/alt çizgi, harfle başlamalı (örn. PICK)','err'); return; }
+  pendantCmd({cmd:'teach', name:name});
+}
+function cmdDeleteTaught(name){ if(!confirm(name+' pozunu sil?')) return; pendantCmd({cmd:'delete_taught', name:name}); }
+function cmdGripper(action){ if(eStopActive){appendLog('E-STOP aktif','err');return;} pendantCmd({cmd:'gripper', action:action}); }
+function sendSpeed(){ if(rosConnected && bridgeAlive) pendantCmd({cmd:'set_speed', speed:speedPercent}, true); }
+
+// ════════════════════════════════════════════
+//  Görev çalıştırma (Run sayfası) — bridge görev makinesi
+// ════════════════════════════════════════════
+function startTask(){
+  if(!rosConnected){ appendLog('Bağlantı yok','err'); return; }
+  if(eStopActive){ appendLog('E-STOP aktif','err'); return; }
+  if(!selectedTask){ appendLog('Görev tanımlı değil','warn'); return; }
+  if(!taskReady()){ appendLog('Eksik öğretilmiş pozlar var — önce Teach ile öğretin','err'); return; }
+  if(bridgeBusy()){ appendLog('Bridge meşgul','warn'); return; }
+  appendLog('▶ Görev başlatılıyor: '+selectedTask+' (fincan gripper\'a bağlanmaz — sim. sınırı)','sys');
+  pendantCmd({cmd:'run_task', task:selectedTask, speed:speedPercent});
+}
+function stopTask(){ appendLog('■ Durdur (goal iptal + hold)','warn'); pendantCmd({cmd:'stop'}); Object.keys(jogTimers).forEach(k=>jogJointStop(k)); }
+
+// ════════════════════════════════════════════
+//  Simülasyon E-Stop
+// ════════════════════════════════════════════
+function showEstop(on){
+  document.getElementById('estop-banner').classList.toggle('show', on);
+  document.getElementById('estop-top-btn').classList.toggle('active', on);
+  document.getElementById('estop-top-btn').textContent = on ? 'E-STOP SIFIRLA' : 'SİM. ACİL DURDUR';
+  setStateBadge(on ? 'estop' : (rosConnected?'ready':'disconnected'));
+  setCartEnabled(); updateTaskButton();
+}
+function eStop(){
+  eStopActive=!eStopActive;
+  showEstop(eStopActive);
+  if(eStopActive){
+    Object.keys(jogTimers).forEach(k=>jogJointStop(k));
+    pendingCmdId=null;
+    if(rosConnected && trajPub){
+      trajPub.publish(new ROSLIB.Message({joint_names:JOINT_NAMES, points:[]}));
+      appendLog('Boş trajectory gönderildi (kontrolcü hold)','err');
+    }
+    if(rosConnected && cmdPub) pendantCmd({cmd:'estop', active:true});
+    appendLog('SİMÜLASYON E-STOP — hareketler iptal edildi, komutlar reddediliyor','err');
+  } else {
+    if(rosConnected && cmdPub) pendantCmd({cmd:'estop', active:false});
+    syncTargetToLive();
+    appendLog('E-STOP sıfırlandı — sistem hazır (görev otomatik devam etmez)','warn');
+  }
+}
+
+function onScenarioChange(){
+  selectedTask = document.getElementById('scenario-sel').value;
+  if(robotInfo && robotInfo.tasks && robotInfo.tasks[selectedTask]) buildTraceList(robotInfo.tasks[selectedTask].map(n=>({name:n,state:'pending'})));
+  renderTaskRequirements();
+  appendLog('Görev seçildi: '+(selectedTask||'—'),'sys');
+}
+function onSpeedChange(v){
+  speedPercent=parseInt(v);
+  document.getElementById('speed-lbl').textContent=v+'%';
+  document.getElementById('chip-speed').textContent=v+'%';
+}
+
+// ════════════════════════════════════════════
+//  UI kurulum / render
+// ════════════════════════════════════════════
+function buildJointUI(){
+  const names=['J1','J2','J3','J4','J5','J6'];
+  document.getElementById('joint-list-dash').innerHTML = names.map((n,i)=>`
+    <div class="joint-row"><div class="jn">${n}</div>
+      <div class="jbg"><div class="jbar" id="dbar${i}" style="width:50%"></div><div class="jtgt" id="dtgt${i}" style="left:50%"></div></div>
+      <div class="jv" id="dval${i}">0.00°</div><div class="jv t" id="dtval${i}">→ 0.00°</div></div>`).join('');
+
+  document.getElementById('jog-list').innerHTML = names.map((n,i)=>`
+    <div class="jog-item">
+      <div class="jn">${n}</div>
+      <div class="jlim">${jointLimits[i][0].toFixed(0)}°</div>
+      <button class="hold-btn" onpointerdown="jogJointStart(${i},-1)" onpointerup="jogJointStop(${i})" onpointerleave="jogJointStop(${i})" onpointercancel="jogJointStop(${i})"><i class="ti ti-minus"></i></button>
+      <input type="range" min="${jointLimits[i][0]}" max="${jointLimits[i][1]}" step="0.5" value="0" id="jslider${i}" oninput="onJogSlider(${i},this.value)" onchange="onJogSliderRelease(${i})">
+      <button class="hold-btn" onpointerdown="jogJointStart(${i},1)" onpointerup="jogJointStop(${i})" onpointerleave="jogJointStop(${i})" onpointercancel="jogJointStop(${i})"><i class="ti ti-plus"></i></button>
+      <div class="jlim">${jointLimits[i][1].toFixed(0)}°</div>
+      <div class="jv" id="jval${i}" title="canlı">0.00°</div>
+      <div class="jv t" id="jtval${i}" title="hedef">→ 0.00°</div>
+    </div>`).join('');
+
+  document.getElementById('vel-bars').innerHTML = names.map((n,i)=>`
+    <div class="joint-row"><div class="jn">${n}</div>
+      <div class="jbg"><div class="jbar" id="vbar${i}" style="width:0%;background:var(--green2);"></div></div>
+      <div class="jv" id="vval${i}">0.0°/s</div></div>`).join('');
+
+  document.getElementById('eff-bars').innerHTML = names.map((n,i)=>`
+    <div class="joint-row"><div class="jn">${n}</div>
+      <div class="jbg"><div class="jbar" id="ebar${i}" style="width:0%;background:var(--amber);"></div></div>
+      <div class="jv" id="eval${i}">0.0 Nm</div></div>`).join('');
+
+  document.getElementById('mon-rows').innerHTML = names.map((n,i)=>`
+    <tr><td>${n}</td><td id="m-live${i}">—</td><td id="m-tgt${i}">—</td><td class="err" id="m-err${i}">—</td><td id="m-vel${i}">—</td><td id="m-eff${i}">—</td><td>${jointLimits[i][0]} … ${jointLimits[i][1]}</td></tr>`).join('');
+}
+
+function buildTraceList(steps){
+  document.getElementById('trace-list').innerHTML = steps.length ? steps.map((s,i)=>`
+    <div class="trace-line ${s.state||''}" id="trace-${i}">${i+1}. ${escapeHtml(s.name)}<span class="tt">${s.t_s!=null?s.t_s+' s':''}</span></div>`).join('') : '<div class="note">Görev adımı yok.</div>';
+  document.getElementById('prog-pills').innerHTML = steps.map((s,i)=>`<div class="pill ${s.state==='pending'?'':(s.state||'')}" id="p${i}"></div>`).join('');
+}
+
+function pct(i, v){ const [lo,hi]=jointLimits[i]; return Math.max(0,Math.min(100,((v-lo)/(hi-lo)*100))).toFixed(1); }
+
+function renderAll(){
+  jointDegsLive.forEach((v,i)=>{
+    const db=document.getElementById('dbar'+i), dv=document.getElementById('dval'+i), dt=document.getElementById('dtgt'+i), dtv=document.getElementById('dtval'+i);
+    if(db){db.style.width=pct(i,v)+'%';} if(dv){dv.textContent=v.toFixed(2)+'°';}
+    if(dt){dt.style.left=pct(i,jointTargetDegs[i])+'%';} if(dtv){dtv.textContent='→ '+jointTargetDegs[i].toFixed(2)+'°';}
+    const jsl=document.getElementById('jslider'+i), jv=document.getElementById('jval'+i), jt=document.getElementById('jtval'+i);
+    if(jsl && document.activeElement!==jsl){ jsl.value=jointTargetDegs[i]; }
+    if(jv){jv.textContent=v.toFixed(2)+'°';}
+    if(jt){jt.textContent='→ '+jointTargetDegs[i].toFixed(2)+'°';}
+    const ml=document.getElementById('m-live'+i), mt=document.getElementById('m-tgt'+i), me=document.getElementById('m-err'+i), mv=document.getElementById('m-vel'+i), mf=document.getElementById('m-eff'+i);
+    if(ml) ml.textContent=v.toFixed(2); if(mt) mt.textContent=jointTargetDegs[i].toFixed(2);
+    if(me) me.textContent=(v-jointTargetDegs[i]).toFixed(2);
+    if(mv) mv.textContent=jointVelLive[i].toFixed(1); if(mf) mf.textContent=jointEffLive[i].toFixed(2);
+  });
+  jointVelLive.forEach((v,i)=>{
+    const p=Math.min(100, Math.abs(v)/90*100).toFixed(1);
+    const b=document.getElementById('vbar'+i), t=document.getElementById('vval'+i);
+    if(b){b.style.width=p+'%';} if(t){t.textContent=v.toFixed(1)+'°/s';}
+  });
+  jointEffLive.forEach((v,i)=>{
+    const p=Math.min(100, Math.abs(v)/20*100).toFixed(1);
+    const b=document.getElementById('ebar'+i), t=document.getElementById('eval'+i);
+    if(b){b.style.width=p+'%';} if(t){t.textContent=v.toFixed(1)+' Nm';}
+  });
+}
+
+function renderMonitor(st){
+  const badge=document.getElementById('mon-state');
+  badge.textContent=st.state; badge.className='badge '+(st.state==='FAILED'||st.state==='ESTOP'?'br':st.state==='EXECUTING'||st.state==='PLANNING'?'ba':'bg');
+  const tcp=st.tcp;
+  document.getElementById('mon-tcp').innerHTML = tcp ? `
+    <div class="k">X / Y / Z</div><div class="v">${tcp.x.toFixed(4)} / ${tcp.y.toFixed(4)} / ${tcp.z.toFixed(4)} m</div>
+    <div class="k">Roll / Pitch / Yaw</div><div class="v">${tcp.roll.toFixed(2)} / ${tcp.pitch.toFixed(2)} / ${tcp.yaw.toFixed(2)} °</div>
+    <div class="k">Frame</div><div class="v">${escapeHtml(tcp.frame||'')}</div>` : '<div class="k">—</div><div class="v">yok</div>';
+  const p=st.plan||{}, x=st.exec||{}, c=st.collision||{}, t=st.task||{}, g=st.gripper||{};
+  const cur = (t.steps||[])[t.step_index] || {};
+  document.getElementById('mon-plan').innerHTML = `
+    <div class="k">Planlama</div><div class="v">${p.ok==null?'—':(p.ok?'OK':'BAŞARISIZ')} ${escapeHtml(p.planner||'')} ${p.time_s!=null?p.time_s+'s':''} ${p.points!=null?p.points+' nokta':''} ${p.fraction!=null?'frac '+p.fraction:''} ${escapeHtml(p.error_code||'')}</div>
+    <div class="k">Yürütme</div><div class="v">${escapeHtml(x.goal_status||'—')} ${x.elapsed_s!=null?x.elapsed_s+'s':''} ${x.timeout_s!=null?'/ '+x.timeout_s+'s':''}</div>
+    <div class="k">Çarpışma</div><div class="v">${c.valid==null?'—':(c.valid?'yok':'VAR: '+escapeHtml((c.contacts||[]).join(', ')))}</div>
+    <div class="k">Gripper</div><div class="v">${escapeHtml(g.state||'—')} ${g.angle_deg!=null?g.angle_deg+'°':''} ${g.cmd_deg!=null?'(cmd '+g.cmd_deg+'°)':''} — nesne tutma simüle edilmez</div>
+    <div class="k">Görev</div><div class="v">${escapeHtml(t.name||'—')} ${t.running?'adım '+(t.step_index+1)+'/'+t.step_count+' '+escapeHtml(t.step_name||''):''} ${t.result?escapeHtml(t.result):''}</div>
+    <div class="k">Adım süresi</div><div class="v">${cur.t_s!=null?cur.t_s+' s':'—'} ${cur.plan_s!=null?'(plan '+cur.plan_s+' s)':''}</div>
+    <div class="k">Çevrim süresi</div><div class="v">${t.running?t.cycle_time_s+' s (sürüyor)':(t.last_cycle_time_s!=null?t.last_cycle_time_s+' s (son) · '+t.count+' çevrim':'—')}</div>
+    <div class="k">Sahne / pozlar</div><div class="v">${escapeHtml((st.workcell_loaded||[]).join(', ')||'—')} · ${st.taught_count!=null?st.taught_count+' öğretilmiş poz':''}</div>
+    <div class="k">Hız</div><div class="v">${st.speed!=null?st.speed+'%':'—'}</div>
+    <div class="k">Son hata</div><div class="v">${escapeHtml(st.last_error||'—')}</div>`;
+}
+
+function setStateBadge(s){
+  const b=document.getElementById('state-badge');
+  const map={ready:['bg','Hazır'],planning:['ba','Planlanıyor'],running:['ba','Yürütülüyor'],estop:['br','SİM. E-STOP'],disconnected:['br','Bağlantı yok'],done:['bg','Hedefe ulaşıldı'],failed:['br','Başarısız'],stopped:['ba','Durduruldu']};
+  const [cls,txt]=map[s]||['ba',s];
+  b.className='badge '+cls; b.textContent=txt;
+}
+function setRosBar(state, txt){
+  const bar=document.getElementById('ros-bar');
+  const ico=document.getElementById('ros-bar-icon');
+  bar.className='ros-status-bar '+state;
+  document.getElementById('ros-bar-txt').textContent=txt;
+  const icons={connected:'ti-wifi',connecting:'ti-wifi-2',disconnected:'ti-wifi-off'};
+  ico.className='ti '+(icons[state]||'ti-wifi-off');
+  document.getElementById('ros-sub').textContent=txt;
+}
+
+// ════════════════════════════════════════════
+//  Log
+// ════════════════════════════════════════════
+function appendLog(msg,type){
+  type=type||'';
+  const now=new Date();
+  const t=[now.getHours(),now.getMinutes(),now.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
+  logLines.push({t,msg,type});
+  const area=document.getElementById('log-area');
+  const d=document.createElement('div');
+  d.className='log-line';
+  const ts=document.createElement('span'); ts.className='lt'; ts.textContent=t;
+  const tm=document.createElement('span'); tm.className='lm '+type; tm.textContent=msg;
+  d.appendChild(ts); d.appendChild(tm);
+  area.appendChild(d);
+  while(area.childElementCount>400) area.removeChild(area.firstChild);
+  area.scrollTop=area.scrollHeight;
+  document.getElementById('log-badge').textContent=logLines.length+' satır';
+}
+function clearLog(){ logLines=[]; document.getElementById('log-area').innerHTML=''; document.getElementById('log-badge').textContent='0 satır'; }
+function exportLog(){
+  const txt=logLines.map(l=>'['+l.t+'] '+l.msg).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(txt);
+  a.download='mery6_log_'+Date.now()+'.txt';
+  a.click();
+}
+</script>
+</body>
+</html>

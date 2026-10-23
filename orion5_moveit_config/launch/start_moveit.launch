@@ -1,0 +1,11 @@
+<launch>
+
+    <arg name="rviz_gui" default="true"/>
+
+    <!-- start moveit launch files -->
+    <include file="$(find orion5_moveit_config)/launch/move_group.launch" />
+
+    <!-- start rviz with moveit plugin -->
+    <node name="rviz" pkg="rviz" type="rviz" if="$(arg rviz_gui)" args="-d $(find orion5_moveit_config)/rviz/moveit_display.rviz" />
+
+</launch>

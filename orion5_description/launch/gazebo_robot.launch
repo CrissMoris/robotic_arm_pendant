@@ -1,0 +1,22 @@
+<launch>
+
+  <!--Robot description and related parameters -->
+ 
+  <param name="robot_description" textfile="$(find orion5_description)/urdf/orion5_v166.urdf" />
+
+  <!-- Controller  -->
+  <rosparam file="$(find orion5_description)/config/robot_controllers.yaml"/>
+  <node name="Controller_Spawner" pkg="controller_manager" type="spawner" 
+        args="joint_state_controller orion_arm_pos_joint_traj_controller"/>
+  
+  <!-- activating joint_state_publisher and robot_state publisher and joint_state_publisher -->
+  <node name="RSP" pkg="robot_state_publisher" type="robot_state_publisher" output="screen"/>
+
+  <!-- including Gazebo world -->
+  <include file="$(find gazebo_ros)/launch/empty_world.launch" />
+  
+  <!-- Executing Gazebo with robot -->
+  <node name="spawn_model" pkg="gazebo_ros" type="spawn_model" output="screen"
+        args="-param robot_description -urdf -model orion5_v166 -z 0.4" />
+
+</launch>

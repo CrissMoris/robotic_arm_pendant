@@ -1,0 +1,140 @@
+<?xml version="1.0" ?>
+<!--
+  Barista validation workcell (simulation only).
+
+  Robot: orion5_v166 + MC1, spawned with  -z 0.4  (base_link sits on top of the pedestal).
+  Frame rule: Gazebo z = base_link z + 0.40.  The MoveIt planning-scene copies of these objects live in
+  orion5_interface/config/pendant_bridge.yaml (workcell:) in base_link coordinates.
+
+  Object          size (x y z)        Gazebo pose (x y z)      base_link z
+  pedestal        0.20 0.20 0.40      0.00  0.00 0.20         top at 0.00 (scene copy: top at -0.02)
+  table top       0.60 0.80 0.03      0.55  0.00 0.40         top surface 0.015
+  cup (cylinder)  r 0.035 h 0.10      0.42 -0.15 0.465        bottom 0.015  (NOT a planning-scene obstacle)
+  coffee_machine  0.20 0.30 0.40      0.75  0.00 0.615        pure obstacle
+  place_pad       0.15 0.15 0.01      0.42  0.15 0.42         top 0.025
+
+  The cup is static: there is no grasp/attach plugin, so "pick" only means the gripper closed at the cup.
+-->
+<sdf version="1.7">
+  <world name="barista">
+
+    <light name="sun" type="directional">
+      <cast_shadows>1</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>1</static>
+      <link name="ground_plane_link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
+          <surface><friction><ode><mu>100</mu><mu2>50</mu2></ode></friction></surface>
+        </collision>
+        <visual name="visual">
+          <cast_shadows>0</cast_shadows>
+          <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material>
+        </visual>
+      </link>
+    </model>
+
+    <physics type="ode">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1</real_time_factor>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+    <gravity>0 0 -9.8</gravity>
+    <scene>
+      <ambient>0.4 0.4 0.4 1</ambient>
+      <background>0.7 0.7 0.7 1</background>
+      <shadows>1</shadows>
+    </scene>
+
+    <!-- Robot pedestal -->
+    <model name="pedestal">
+      <static>1</static>
+      <pose>0 0 0.20 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.20 0.20 0.40</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>0.20 0.20 0.40</size></box></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/DarkGrey</name></script></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Workbench: top plus four legs -->
+    <model name="table">
+      <static>1</static>
+      <pose>0.55 0 0 0 0 0</pose>
+      <link name="link">
+        <collision name="top"><pose>0 0 0.40 0 0 0</pose><geometry><box><size>0.60 0.80 0.03</size></box></geometry>
+          <surface><friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode></friction></surface></collision>
+        <visual name="top_visual"><pose>0 0 0.40 0 0 0</pose><geometry><box><size>0.60 0.80 0.03</size></box></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Wood</name></script></material></visual>
+        <collision name="leg1"><pose> 0.27  0.37 0.1925 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.385</length></cylinder></geometry></collision>
+        <visual    name="leg1_v"><pose> 0.27  0.37 0.1925 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.385</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material></visual>
+        <collision name="leg2"><pose> 0.27 -0.37 0.1925 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.385</length></cylinder></geometry></collision>
+        <visual    name="leg2_v"><pose> 0.27 -0.37 0.1925 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.385</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material></visual>
+        <collision name="leg3"><pose>-0.27  0.37 0.1925 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.385</length></cylinder></geometry></collision>
+        <visual    name="leg3_v"><pose>-0.27  0.37 0.1925 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.385</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material></visual>
+        <collision name="leg4"><pose>-0.27 -0.37 0.1925 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.385</length></cylinder></geometry></collision>
+        <visual    name="leg4_v"><pose>-0.27 -0.37 0.1925 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.385</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material></visual>
+      </link>
+    </model>
+
+    <!-- Cup: manipulation target (static, no grasp simulation) -->
+    <model name="cup">
+      <static>1</static>
+      <pose>0.42 -0.15 0.465 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><cylinder><radius>0.035</radius><length>0.10</length></cylinder></geometry></collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.035</radius><length>0.10</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/White</name></script></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Coffee machine representation (obstacle) -->
+    <model name="coffee_machine">
+      <static>1</static>
+      <pose>0.75 0 0.615 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.20 0.30 0.40</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>0.20 0.30 0.40</size></box></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Black</name></script></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Place / service area -->
+    <model name="place_pad">
+      <static>1</static>
+      <pose>0.42 0.15 0.42 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.15 0.15 0.01</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>0.15 0.15 0.01</size></box></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Green</name></script></material>
+        </visual>
+      </link>
+    </model>
+
+    <gui fullscreen="0">
+      <camera name="user_camera">
+        <pose>2.2 -1.8 1.6 0 0.35 2.4</pose>
+        <view_controller>orbit</view_controller>
+      </camera>
+    </gui>
+
+  </world>
+</sdf>

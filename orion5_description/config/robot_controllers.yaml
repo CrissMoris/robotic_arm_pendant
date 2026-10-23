@@ -1,0 +1,55 @@
+orion_arm_pos_joint_traj_controller:
+  type: position_controllers/JointTrajectoryController
+  joints:
+    - joint_1
+    - joint_2
+    - joint_3
+    - joint_4
+    - joint_5
+    - joint_6
+  constraints:
+    goal_time: 1.2              # ← Daha uzun süre (0.6 → 1.2)
+    stopped_velocity_tolerance: 0.05  # ← Daha sıkı (0.1 → 0.05)
+  stop_trajectory_duration: 0.1  # ← Daha yumuşak durma
+  state_publish_rate: 50        # ← Daha yüksek publish rate
+  action_monitor_rate: 20       # ← Daha yüksek monitoring
+
+orion_arm_joint_group_pos_controller:
+  type: position_controllers/JointGroupPositionController
+  joints:
+    - joint_1
+    - joint_2
+    - joint_3
+    - joint_4
+    - joint_5
+    - joint_6
+
+orion_arm_effort_controller:
+  type: effort_controllers/JointGroupEffortController
+  joints:
+    - joint_1
+    - joint_2
+    - joint_3
+    - joint_4
+    - joint_5
+    - joint_6
+  constraints:
+    goal_time: 2.0
+    stopped_velocity_tolerance: 0.02
+  stop_trajectory_duration: 0.3
+  state_publish_rate: 100
+  action_monitor_rate: 50
+
+joint_state_controller:
+  type: joint_state_controller/JointStateController
+  publish_rate: 50
+
+# gazebo_ros_control:
+#   pid_gains:
+#     # DÜZELTME: Çok daha düşük, stabil PID değerleri
+#     joint_1: {p: 40.0, i: 0.01, d: 10.0}   # P artırıldı, I biraz artırıldı
+#     joint_2: {p: 45.0, i: 0.01, d: 12.0}   # En ağır joint - daha güçlü değerler
+#     joint_3: {p: 40.0, i: 0.008, d: 10.0}  # Stable tutucu değerler
+#     joint_4: {p: 35.0, i: 0.006, d: 9.0}   # Biraz daha güçlü
+#     joint_5: {p: 30.0, i: 0.005, d: 8.0}   # İyileştirildi
+#     joint_6: {p: 25.0, i: 0.004, d: 7.0}   # Daha stable

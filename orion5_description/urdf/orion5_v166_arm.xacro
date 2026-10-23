@@ -1,0 +1,248 @@
+<?xml version="1.0"?>
+
+<robot xmlns:xacro="http://wiki.ros.org/xacro">
+
+    <!-- tcp_z: offset of the MoveIt tip link (eef_tcp_link) from eef_link along +Z.
+         0.0 for the bare arm; the MC1 robot xacro passes the gripper TCP offset. -->
+    <xacro:macro name="orion5_v166" params="tcp_z:=0.0">
+
+        <link name="base_link">
+            <inertial>
+                <origin rpy="0 0 3.92699081" xyz="0.0014872 0.025681 0.0015954"/>
+                <mass value="0.43234"/>
+                <inertia ixx="0.00085424" ixy="-4.256E-07" ixz="1.7204E-05" iyy="0.0014489" iyz="-3.1849E-07" izz="0.00085002"/>
+            </inertial>
+            <visual>
+                <origin rpy="0 0 3.92699081" xyz="0 0 0"/>
+                <geometry>
+                    <mesh filename="package://orion5_description/meshes/base_link.STL"/>
+                </geometry>
+                <material name="blue">
+                </material>
+            </visual>
+            <collision>
+                <origin rpy="0 0 3.92699081" xyz="0 0 0"/>
+                <geometry>
+                    <mesh filename="package://orion5_description/meshes/base_link.STL"/>
+                </geometry>
+            </collision>
+        </link>
+
+        <joint name="joint_1" type="revolute">
+            <origin xyz="0 0 0.05375" rpy="0 0 0.7853981" />
+            <parent link="base_link" />
+            <child link="link_1" />
+            <axis xyz="0 0 -1" />
+            <limit lower="-3.14" upper="3.14" effort="200" velocity="1.57" />
+            <dynamics damping="0.1" friction="0.1"/>
+        </joint>
+
+        <link name="link_1">
+            <inertial>
+                <origin rpy="0 0 0" xyz="0.0032053 0.0032066 0.071258"/>
+                <mass value="1.4977"/>
+                <inertia ixx="0.0040548" ixy="-6.3827e-05" ixz="1.9488e-05" iyy="0.0040547" iyz="1.9457e-05" izz="0.003024"/>
+            </inertial>
+            <visual>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <geometry>
+                    <mesh filename="package://orion5_description/meshes/link_1.STL"/>
+                </geometry>
+                <material name="black">
+                </material>
+            </visual>
+            <collision>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <geometry>
+                    <mesh filename="package://orion5_description/meshes/link_1.STL"/>
+                </geometry>
+            </collision>
+        </link>
+
+        <joint name="joint_2" type="revolute">
+            <origin xyz="0.044371 0.044371 0.06825" rpy="-1.5708 0 -0.7854" />
+            <parent link="link_1" />
+            <child link="link_2" />
+            <axis xyz="0 0 -1" />
+            <limit lower="-3.14" upper="3.14" effort="200" velocity="1.57" />
+            <dynamics damping="0.1" friction="0.1"/>
+        </joint>
+
+        <link name="link_2">
+            <inertial>
+                <origin rpy="0 0 0" xyz="-0.011965 -0.20398 0.082482"/>
+                <mass value="3.9537"/>
+                <inertia ixx="0.14571" ixy="0.0011447" ixz="-8.9776e-05" iyy="0.0068268" iyz="-0.00039373" izz="0.14325"/>
+            </inertial>
+            <visual>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <geometry>
+                    <mesh filename="package://orion5_description/meshes/link_2.STL"/>
+                </geometry>
+                <material name="black">
+                </material>
+            </visual>
+            <collision>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <geometry>
+                    <mesh filename="package://orion5_description/meshes/link_2.STL"/>
+                </geometry>
+            </collision>
+        </link>
+
+        <joint name="joint_3" type="revolute">
+            <origin xyz="0 -0.421 0.02325" rpy="-3.1416 0 0" />
+            <parent link="link_2" />
+            <child link="link_3" />
+            <axis xyz="0 0 -1" />
+            <limit lower="-2.8" upper="2.8" effort="200" velocity="1.57" />
+            <dynamics damping="0.1" friction="0.1"/>
+        </joint>
+
+        <link name="link_3">
+            <inertial>
+                <origin rpy="0 0 0" xyz="-0.0003235 0.25691 0.062797"/>
+                <mass value="1.0868"/>
+                <inertia ixx="0.0084673" ixy="-4.0465e-05" ixz="-1.4163e-06" iyy="0.0014603" iyz="-0.00016568" izz="0.0081904"/>
+            </inertial>
+            <visual>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <geometry>
+                    <mesh filename="package://orion5_description/meshes/link_3.STL"/>
+                </geometry>
+                <material name="black">
+                </material>
+            </visual>
+            <collision>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <geometry>
+                    <mesh filename="package://orion5_description/meshes/link_3.STL"/>
+                </geometry>
+            </collision>
+        </link>
+
+        <joint name="joint_4" type="revolute">
+            <origin xyz="0 0.427 0.018" rpy="-3.1416 0 0" />
+            <parent link="link_3" />
+            <child link="link_4" />
+            <axis xyz="0 0 -1" />
+            <limit lower="-3.14" upper="3.14" effort="200" velocity="1.57" />
+            <dynamics damping="0.1" friction="0.1"/>
+        </joint>
+
+        <link name="link_4">
+            <inertial>
+                <origin rpy="0 0 0" xyz="0.00067229 -0.010802 0.051025"/>
+                <mass value="0.50427"/>
+                <inertia ixx="0.00065514" ixy="-1.9544e-06" ixz="1.7674e-07" iyy="0.00043345" iyz="2.2995e-06" izz="0.00063832"/>
+            </inertial>
+            <visual>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <geometry>
+                    <mesh filename="package://orion5_description/meshes/link_4.STL"/>
+                </geometry>
+                <material name="black">
+                </material>
+            </visual>
+            <collision>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <geometry>
+                    <mesh filename="package://orion5_description/meshes/link_4.STL"/>
+                </geometry>
+            </collision>
+        </link>
+
+        <joint name="joint_5" type="revolute">
+            <origin xyz="0 -0.052 0.053" rpy="1.5708 -0.7854 0" />
+            <parent link="link_4" />
+            <child link="link_5" />
+            <axis xyz="0 0 -1" />
+            <limit lower="-3.14" upper="3.14" effort="200" velocity="1.57" />
+            <dynamics damping="0.1" friction="0.1"/>
+        </joint>
+
+        <link name="link_5">
+            <inertial>
+                <origin rpy="0 0 0" xyz="-0.0023932 -0.0027963 0.046475"/>
+                <mass value="0.23998"/>
+                <inertia ixx="0.00019279" ixy="-1.1587e-05" ixz="1.866e-06" iyy="0.00019279" iyz="1.7368e-06" izz="0.00019816"/>
+            </inertial>
+            <visual>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <geometry>
+                    <mesh filename="package://orion5_description/meshes/link_5.STL"/>
+                </geometry>
+                <material name="black">
+                </material>
+            </visual>
+            <collision>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <geometry>
+                    <mesh filename="package://orion5_description/meshes/link_5.STL"/>
+                </geometry>
+            </collision>
+        </link>
+
+        <joint name="joint_6" type="revolute">
+            <origin xyz="0.031289 0.031289 0.053" rpy="-1.5708 0 -0.7854" />
+            <parent link="link_5" />
+            <child link="link_6" />
+            <axis xyz="0 0 -1" />
+            <limit lower="-3.14" upper="3.14" effort="200" velocity="1.57" />
+            <dynamics damping="0.1" friction="0.1"/>
+        </joint>
+
+        <link name="link_6">
+            <inertial>
+                <origin rpy="0 0 0" xyz="-0.00030609 -0.00064718 0.026501"/>
+                <mass value="0.0029836"/>
+                <inertia ixx="9.0087e-05" ixy="2.945e-08" ixz="-1.0412e-07" iyy="8.7872e-05" iyz="-9.2359e-08" izz="0.00013295"/>
+            </inertial>
+            <visual>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <geometry>
+                    <mesh filename="package://orion5_description/meshes/link_6.STL"/>
+                </geometry>
+                <material name="gray">
+                </material>
+            </visual>
+            <collision>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <geometry>
+                    <mesh filename="package://orion5_description/meshes/link_6.STL"/>
+                </geometry>
+            </collision>
+        </link>
+
+        <joint name="eef_fixed_joint" type="fixed">
+            <origin rpy="0 0 0" xyz="0 0 0.047"/>
+            <parent link="link_6"/>
+            <child link="eef_link"/>
+        </joint>
+
+        <link name="eef_link">
+            <inertial>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <mass value="0.00001"/>
+                <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+            </inertial>
+        </link>
+
+        <!-- MoveIt planning tip (SRDF group orion5_arm: base_link -> eef_tcp_link) -->
+        <joint name="eef_tcp_fixed_joint" type="fixed">
+            <origin rpy="0 0 0" xyz="0 0 ${tcp_z}"/>
+            <parent link="eef_link"/>
+            <child link="eef_tcp_link"/>
+        </joint>
+
+        <link name="eef_tcp_link">
+            <inertial>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <mass value="0.00001"/>
+                <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+            </inertial>
+        </link>
+
+    </xacro:macro>
+
+</robot>

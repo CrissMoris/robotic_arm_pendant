@@ -1,0 +1,11 @@
+
+ifname: eth0
+
+ethercat:
+  slave_no: [1, 2, 3, 4, 5, 6]
+  joint_names: [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6]
+  encoder_zeros: [262144, 262144, 262144, 262144, 262144, 262144]
+  encoder_resolution: [524288, 524288, 524288, 524288, 524288, 524288]
+  rated_torques: [87.0, 87.0, 52.0, 10.0, 10.0, 10.0]
+
+use_torque_sensor: false

@@ -1,0 +1,335 @@
+<?xml version="1.0"?>
+
+<robot xmlns:xacro="http://wiki.ros.org/xacro">
+
+    <!-- Distance from gripper_base to the fingertip TCP along +Z (used by tcp_fixed_joint below
+         and by the arm xacro so that eef_tcp_link coincides with gripper_tcp_link). -->
+    <xacro:property name="mc1_tcp_offset_z" value="0.17"/>
+
+    <xacro:macro name="mc1_gripper">
+
+        <!-- base -->
+
+        <link name="gripper_base">
+            <inertial>
+                <origin xyz="4.4451E-06 0.036242 5.3571E-06" rpy="0 0 0" />
+                <mass value="0.71705" />
+                <inertia ixx="0.00058422" ixy="6.8654E-08" ixz="-1.0232E-07" iyy="0.00041857" iyz="-6.8207E-07" izz="0.00059057" />
+            </inertial>
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 0" />
+                <geometry>
+                    <mesh filename="package://mcfly_grippers/meshes/mc1/gripper_base.STL" />
+                </geometry>
+                <material name="blue">
+                </material>
+            </visual>
+        </link>
+
+        <!-- Left Parts of Gripper -->
+
+        <joint name="grip_joint_1_left" type="revolute">
+            <origin xyz="0.01694 0 0.076" rpy="1.5707963267949 -0.860305 3.14159265358979" />
+            <parent link="gripper_base" />
+            <child link="left_link_1" />
+            <axis xyz="0 0 -1" />
+            <limit lower="-0.78" upper="0.78" effort="20" velocity="1.57" />
+        </joint>
+
+        <link name="left_link_1">
+            <inertial>
+                <origin xyz="0.000598859748040793 0.0120833705379146 -6.02625100271384E-17" rpy="0 0 0" />
+                <mass value="0.00272921383904814" />
+                <inertia ixx="1.01764599926882E-05" ixy="9.46828814762395E-07" ixz="-1.00065513656923E-22" iyy="1.53812754230838E-06" iyz="2.08784003221063E-22" izz="9.82357676644471E-06" />
+            </inertial>
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 0" />
+                <geometry>
+                    <mesh filename="package://mcfly_grippers/meshes/mc1/left_link_1.STL" />
+                </geometry>
+                <material name="gray">
+                </material>
+            </visual>
+        </link>
+
+        <joint name="grip_joint_2_left" type="revolute">
+            <origin xyz="0.00743999999999995 0 0.0924544826719043" rpy="1.5707963267949 -0.860305 3.14159265358979" />
+            <parent link="gripper_base" />
+            <child link="left_link_2" />
+            <axis xyz="0 0 -1" />
+            <limit lower="-0.78" upper="0.78" effort="20" velocity="1.57" />
+        </joint>
+
+        <link name="left_link_2">
+            <inertial>
+                <origin xyz="3.46944695195361E-18 0.0235968432148938 -8.34340430633077E-18" rpy="0 0 0" />
+                <mass value="0.00156619385650869" />
+                <inertia ixx="5.52433634457438E-06" ixy="1.98523347012727E-22" ixz="1.85003926977737E-23" iyy="6.20355055842597E-07" iyz="6.58866802763897E-22" izz="5.02647726006852E-06" />
+            </inertial>
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 0" />
+                <geometry>
+                    <mesh filename="package://mcfly_grippers/meshes/mc1/left_link_2.STL" />
+                </geometry>
+                <material name="gray">
+                </material>
+            </visual>
+        </link>
+
+        <joint name="grip_joint_3_left" type="revolute">
+            <origin xyz="0 0.055 0" rpy="3.14159265358979 0 2.28128699" />
+            <parent link="left_link_1" />
+            <child link="left_link_3" />
+            <axis xyz="0 0 -1" />
+            <limit lower="-0.78" upper="0.78" effort="20" velocity="1.57" />
+        </joint>
+
+        <link name="left_link_3">
+            <inertial>
+                <origin xyz="-0.0094699 0.023352 -1.4095E-18" rpy="0 0 0" />
+                <mass value="0.0014832" />
+                <inertia ixx="3.3814E-06" ixy="9.4453E-07" ixz="-1.8366E-22" iyy="6.7069E-07" iyz="-1.0099E-22" izz="3.753E-06" />
+            </inertial>
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 0" />
+                <geometry>
+                    <mesh filename="package://mcfly_grippers/meshes/mc1/left_link_3.STL" />
+                </geometry>
+                <material name="gray">
+                </material>
+            </visual>
+        </link>
+
+        <joint name="left_finger_fixed_joint" type="fixed">
+            <origin xyz="-0.0209999999999626 0.0494544826718965 0.000449999999999937" rpy="1.57079632679489 1.5707963267949 0" />
+            <parent link="left_link_3" />
+            <child link="left_finger" />
+        </joint>
+
+        <link name="left_finger">
+            <inertial>
+                <origin xyz="1.2875E-19 0.0060378 0.01128" rpy="0 0 0" />
+                <mass value="0.0016879" />
+                <inertia ixx="1.2157E-06" ixy="5.2616E-22" ixz="4.5449E-24" iyy="1.4634E-06" iyz="-2.2785E-08" izz="7.0267E-07" />
+            </inertial>
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 0" />
+                <geometry>
+                    <mesh filename="package://mcfly_grippers/meshes/mc1/left_finger.STL" />
+                </geometry>
+                <material name="black">
+                </material>
+            </visual>
+        </link>
+
+        <!-- Right Parts of Gripper -->
+
+        <joint name="grip_joint_1_right" type="revolute">
+            <origin xyz="-0.01694 0 0.076" rpy="1.5708 -0.860305 0" />
+            <parent link="gripper_base" />
+            <child link="right_link_1" />
+            <axis xyz="0 0 1" />
+            <limit lower="-0.78" upper="0.78" effort="20" velocity="1.57" />
+        </joint>
+
+        <link name="right_link_1">
+            <inertial>
+                <origin xyz="0.00059886 0.012083 6.5023E-17" rpy="0 0 0" />
+                <mass value="0.0027292" />
+                <inertia ixx="1.0176E-05" ixy="9.4683E-07" ixz="1.5618E-22" iyy="1.5381E-06" iyz="-1.3566E-21" izz="9.8236E-06" />
+            </inertial>
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 0" />
+                <geometry>
+                    <mesh filename="package://mcfly_grippers/meshes/mc1/right_link_1.STL" />
+                </geometry>
+                <material name="gray">
+                </material>
+            </visual>
+        </link>
+
+        <joint name="grip_joint_2_right" type="revolute">
+            <origin xyz="-0.00744 0 0.0924544826719043" rpy="1.5707963267949 0.85 -3.14159265358979" />
+            <parent link="gripper_base" />
+            <child link="right_link_2" />
+            <axis xyz="0 0 -1" />
+            <limit lower="-0.78" upper="0.78" effort="20" velocity="1.57" />
+        </joint>
+
+        <link name="right_link_2">
+            <inertial>
+                <origin xyz="0 0 0" rpy="0 0 0" />
+                <mass value="0.00156619385650869" />
+                <inertia ixx="5.52433634457438E-06" ixy="1.98523347012727E-22" ixz="1.85003926977737E-23" iyy="6.20355055842597E-07" iyz="6.58866802763897E-22" izz="5.02647726006852E-06" />
+            </inertial>
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 0" />
+                <geometry>
+                    <mesh filename="package://mcfly_grippers/meshes/mc1/right_link_2.STL" />
+                </geometry>
+                <material name="gray">
+                </material>
+            </visual>
+        </link>
+
+        <joint name="grip_joint_3_right" type="revolute">
+            <origin xyz="0 0.055 0" rpy="3.14159265358979 0 2.27609" />
+            <parent link="right_link_1" />
+            <child link="right_link_3" />
+            <axis xyz="0 0 1" />
+            <limit lower="-0.78" upper="0.78" effort="20" velocity="1.57" />
+        </joint>
+
+        <link name="right_link_3">
+            <inertial>
+                <origin xyz="-0.0094699 0.023352 1.4637E-17" rpy="0 0 0" />
+                <mass value="0.0014832" />
+                <inertia ixx="3.3814E-06" ixy="9.4453E-07" ixz="5.4317E-22" iyy="6.7069E-07" iyz="-2.1193E-21" izz="3.753E-06" />
+            </inertial>
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 0" />
+                <geometry>
+                    <mesh filename="package://mcfly_grippers/meshes/mc1/right_link_3.STL" />
+                </geometry>
+                <material name="gray">
+                </material>
+            </visual>
+        </link>
+
+        <joint name="right_finger_fixed_joint" type="fixed">
+            <origin xyz="-0.0210000000000008 0.0494544826719043 -0.000549999999999965" rpy="1.5707963267949 1.5707963267949 0" />
+            <parent link="right_link_3" />
+            <child link="right_finger" />
+        </joint>
+
+        <link name="right_finger">
+            <inertial>
+                <origin xyz="7.96210970419042E-18 0.00603784551449024 0.0112801430653363" rpy="0 0 0" />
+                <mass value="0.00168787458449326" />
+                <inertia ixx="1.21565978691012E-06" ixy="8.68770670628514E-22" ixz="3.33090927706253E-23" iyy="1.46343825235078E-06" iyz="-2.27847839048255E-08" izz="7.02668165047199E-07" />
+            </inertial>
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 0" />
+                <geometry>
+                    <mesh filename="package://mcfly_grippers/meshes/mc1/right_finger.STL" />
+                </geometry>
+                <material name="black">
+                </material>
+            </visual>
+        </link>
+
+        <!-- TCP Link -->
+
+        <joint name="tcp_fixed_joint" type="fixed">
+            <origin rpy="0 0 0" xyz="0 0 ${mc1_tcp_offset_z}"/>
+            <parent link="gripper_base"/>
+            <child link="gripper_tcp_link"/>
+        </joint>
+
+        <link name="gripper_tcp_link">
+            <inertial>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <mass value="0.00001"/>
+                <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+            </inertial>
+        </link>
+
+        <!-- Gazebo Ros Transmission -->
+        <transmission name="grip_joint_1_left_trans">
+            <type>transmission_interface/SimpleTransmission</type>
+            <joint name="grip_joint_1_left">
+                <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+            </joint>
+            <actuator name="grip_joint_1_left_motor">
+                <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+                <mechanicalReduction>1</mechanicalReduction>
+            </actuator>
+        </transmission>
+
+        <transmission name="grip_joint_2_left_trans">
+            <type>transmission_interface/SimpleTransmission</type>
+            <joint name="grip_joint_2_left">
+                <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+            </joint>
+            <actuator name="grip_joint_2_left_motor">
+                <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+                <mechanicalReduction>1</mechanicalReduction>
+            </actuator>
+        </transmission>
+
+        <transmission name="grip_joint_3_left_trans">
+            <type>transmission_interface/SimpleTransmission</type>
+            <joint name="grip_joint_3_left">
+                <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+            </joint>
+            <actuator name="grip_joint_3_left_motor">
+                <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+                <mechanicalReduction>1</mechanicalReduction>
+            </actuator>
+        </transmission>
+
+        <transmission name="grip_joint_1_right_trans">
+            <type>transmission_interface/SimpleTransmission</type>
+            <joint name="grip_joint_1_right">
+                <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+            </joint>
+            <actuator name="grip_joint_1_right_motor">
+                <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+                <mechanicalReduction>1</mechanicalReduction>
+            </actuator>
+        </transmission>
+
+        <transmission name="grip_joint_2_right_trans">
+            <type>transmission_interface/SimpleTransmission</type>
+            <joint name="grip_joint_2_right">
+                <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+            </joint>
+            <actuator name="grip_joint_2_right_motor">
+                <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+                <mechanicalReduction>1</mechanicalReduction>
+            </actuator>
+        </transmission>
+
+        <transmission name="grip_joint_3_right_trans">
+            <type>transmission_interface/SimpleTransmission</type>
+            <joint name="grip_joint_3_right">
+                <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+            </joint>
+            <actuator name="grip_joint_3_right_motor">
+                <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+                <mechanicalReduction>1</mechanicalReduction>
+            </actuator>
+        </transmission>
+
+        <!-- Gazebo Colors -->
+        <gazebo reference="gripper_base">
+            <material>Gazebo/SkyBlue</material>
+        </gazebo>
+        <gazebo reference="left_link_1">
+            <material>Gazebo/Gray</material>
+        </gazebo>
+        <gazebo reference="left_link_2">
+            <material>Gazebo/Gray</material>
+        </gazebo>
+        <gazebo reference="left_link_3">
+            <material>Gazebo/Gray</material>
+        </gazebo>
+        <gazebo reference="left_finger">
+            <material>Gazebo/DarkGray</material>
+        </gazebo>
+        <gazebo reference="right_link_1">
+            <material>Gazebo/Gray</material>
+        </gazebo>
+        <gazebo reference="right_link_2">
+            <material>Gazebo/Gray</material>
+        </gazebo>
+        <gazebo reference="right_link_3">
+            <material>Gazebo/Gray</material>
+        </gazebo>
+        <gazebo reference="right_finger">
+            <material>Gazebo/DarkGray</material>
+        </gazebo>
+
+    </xacro:macro>
+
+</robot>

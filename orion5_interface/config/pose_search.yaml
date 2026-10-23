@@ -1,0 +1,31 @@
+# Inputs for scripts/find_task_poses.py (candidate PICK / PRE_PICK / PLACE / PRE_PLACE search).
+# All coordinates are in base_link. Workcell geometry is read from orion5_description/world/barista.world
+# (cup and place_pad models) and converted with z_base = z_gazebo - gazebo_z_offset; the values under
+# `targets` are only used when a target is listed there explicitly (override).
+
+world_file: ""                 # empty = $(rospack find orion5_description)/world/barista.world
+gazebo_z_offset: 0.40          # robot spawned at z:=0.4 (pedestal height)
+
+# Grasp geometry
+grasp_height_fraction: 0.5     # TCP (fingertip) height on the cup: 0.5 = mid-height
+place_clearance: 0.0           # extra height above the place pad when releasing (m)
+approach_dz: 0.08              # PRE_* poses are this far straight above PICK / PLACE (m)
+
+# Orientation: the taught READY TCP orientation is used as the tool-down reference (if its tool z-axis points
+# down); otherwise an analytic tool-down orientation (roll 180 deg) is used. Candidates rotate it about base Z.
+yaw_candidates_deg: [0, 30, -30, 60, -60, 90, -90, 120, -120, 150, -150, 180]
+
+# Optional small XY offsets (m) to try in addition to the exact target point
+xy_offsets_m: [[0.0, 0.0]]
+
+ik_attempts: 4
+ik_timeout_s: 0.2
+cartesian_eef_step: 0.005
+cartesian_max_joint_jump_rad: 0.35
+plan_check: true               # also test an OMPL plan READY -> PRE_* (planning only, nothing is executed)
+
+# Explicit overrides (normally empty). Example:
+# targets:
+#   PICK:  {xyz: [0.42, -0.15, 0.065], pre: PRE_PICK}
+#   PLACE: {xyz: [0.42,  0.15, 0.075], pre: PRE_PLACE}
+targets: {}

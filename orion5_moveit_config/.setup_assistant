@@ -1,0 +1,11 @@
+moveit_setup_assistant_config:
+  URDF:
+    package: orion5_description
+    relative_path: urdf/orion5_v166_robot.xacro
+    xacro_args: ""
+  SRDF:
+    relative_path: config/orion5_v166.srdf
+  CONFIG:
+    author_name: Mehmet Kahraman
+    author_email: mehmet.kahraman@mcflyrobot.com
+    generated_timestamp: 1709556727
