@@ -196,6 +196,13 @@ class PendantBridge(object):
         self.robot_model = str(rospy.get_param("~robot_model", "orion5_v166"))
         self.gazebo_z_offset = float(rospy.get_param("~gazebo_z_offset", 0.40))
         self.gripper_link_candidates = list(rospy.get_param("~gripper_link_candidates", ["gripper_base", "eef_link", "link_6"]))
+        # Execution clock: controllers run on simulation time (/clock). All execution / arrival / gripper timeouts are
+        # measured in that clock so a slow Gazebo (real-time factor < 1, typical in a VM) does not cause false timeouts.
+        # A wall-clock cap (wall_cap_factor x sim timeout, at least 30 s) still ends the wait if the simulation is paused.
+        self.use_sim_time = bool(rospy.get_param("/use_sim_time", False))
+        self.wall_cap_factor = float(rospy.get_param("~wall_cap_factor", 4.0))
+        self.rtf = None                      # measured real-time factor (sim seconds per wall second), None until sampled
+        self._rtf_sample = None
         self.objects = {str(o["name"]): o for o in (rospy.get_param("~objects", []) or []) if o.get("name")}
 
         self.limits = load_urdf_limits()
@@ -220,7 +227,7 @@ class PendantBridge(object):
                         "note": "CLOSED = fingers at closed angle; the object is carried by a kinematic attachment (simulation)"}
         self.task = {"name": None, "running": False, "step_index": -1, "step_count": 0,
                      "step_name": None, "steps": [], "cycle_time_s": 0.0,
-                     "last_cycle_time_s": None, "count": 0, "result": None, "message": ""}
+                     "last_cycle_time_s": None, "last_cycle_time_sim_s": None, "count": 0, "result": None, "message": ""}
         self.teach_last = None
         self.task_t0 = None
         self.workcell_loaded = []
@@ -288,6 +295,7 @@ class PendantBridge(object):
         rospy.Subscriber("/pendant/cmd", String, self.on_cmd, queue_size=10)
         rospy.Timer(rospy.Duration(1.0 / self.status_rate), self.publish_status)
         rospy.Timer(rospy.Duration(0.5), self.check_collision)
+        threading.Thread(target=self._rtf_loop, daemon=True).start()   # wall-clock thread: keeps sampling even if sim pauses
 
         self.publish_info()
         rospy.loginfo("pendant_bridge: ready (planning frame %s, eef %s, %d taught poses, workcell %s)",
@@ -554,6 +562,29 @@ class PendantBridge(object):
         if self.stop_evt.is_set():
             raise StopRequested()
 
+    def _now(self):
+        """Execution clock (seconds): simulation time when /use_sim_time is set, otherwise wall time."""
+        return rospy.get_time() if self.use_sim_time else time.time()
+
+    def _rtf_loop(self):
+        while not rospy.is_shutdown():
+            try:
+                self._sample_rtf(None)
+            except Exception:
+                pass
+            time.sleep(1.0)
+
+    def _sample_rtf(self, _evt):
+        """Real-time factor = sim seconds elapsed / wall seconds elapsed, sampled about once per second."""
+        wall, sim = time.time(), rospy.get_time()
+        if self._rtf_sample is not None:
+            dw = wall - self._rtf_sample[0]
+            if dw >= 0.5:
+                self.rtf = round((sim - self._rtf_sample[1]) / dw, 2) if self.use_sim_time else 1.0
+                self._rtf_sample = (wall, sim)
+        else:
+            self._rtf_sample = (wall, sim)
+
     def speed_factor(self):
         return max(0.01, min(1.0, self.speed_pct / 100.0))
 
@@ -642,7 +673,9 @@ class PendantBridge(object):
         goal.trajectory = jt
         goal.trajectory.header.stamp = rospy.Time(0)
         self.fjt.send_goal(goal)
-        t0 = time.time()
+        t0 = self._now()                      # execution clock (sim time under Gazebo)
+        w0 = time.time()
+        wall_cap = max(30.0, self.wall_cap_factor * timeout)
         status = None
         while not rospy.is_shutdown():
             if self.stop_evt.is_set():
@@ -651,7 +684,7 @@ class PendantBridge(object):
                     self.exec_info["goal_status"] = "PREEMPTED"
                 raise StopRequested()
             status = self.fjt.get_state()
-            elapsed = time.time() - t0
+            elapsed = self._now() - t0
             with self.lock:
                 self.exec_info["elapsed_s"] = round(elapsed, 2)
             if status in (GoalStatus.SUCCEEDED, GoalStatus.ABORTED, GoalStatus.PREEMPTED,
@@ -661,7 +694,15 @@ class PendantBridge(object):
                 self.fjt.cancel_goal()
                 with self.lock:
                     self.exec_info["goal_status"] = "TIMEOUT"
-                self.set_state(STATE_FAILED, "execution timeout after %.1fs" % elapsed)
+                self.set_state(STATE_FAILED, "execution timeout after %.1fs sim time (limit %.1fs, RTF %s)" % (
+                    elapsed, timeout, self.rtf))
+                return False
+            if time.time() - w0 > wall_cap:
+                self.fjt.cancel_goal()
+                with self.lock:
+                    self.exec_info["goal_status"] = "TIMEOUT"
+                self.set_state(STATE_FAILED, "wall-clock cap %.0fs exceeded (simulation paused or RTF too low; sim elapsed %.1fs)" % (
+                    wall_cap, elapsed))
                 return False
             time.sleep(0.02)
         name = GOAL_STATUS_NAMES.get(status, str(status))
@@ -682,7 +723,9 @@ class PendantBridge(object):
         tol = self.joint_tol if tol is None else tol
         names = list(target.keys())
         goal = [target[n] for n in names]
-        t0 = time.time()
+        t0 = self._now()                      # execution clock (sim time under Gazebo)
+        w0 = time.time()
+        wall_cap = max(10.0, self.wall_cap_factor * timeout)
         settled_since = None
         max_err = float("inf")
         while not rospy.is_shutdown():
@@ -694,12 +737,12 @@ class PendantBridge(object):
                 max_err = max(abs(p - g) for p, g in zip(pos, goal))
                 max_vel = max(abs(v) for v in vel)
                 if max_err < tol and max_vel < self.vel_tol:
-                    settled_since = settled_since or time.time()
-                    if time.time() - settled_since >= self.settle_time:
+                    settled_since = settled_since or self._now()
+                    if self._now() - settled_since >= self.settle_time:
                         return True, max_err
                 else:
                     settled_since = None
-            if time.time() - t0 > timeout:
+            if self._now() - t0 > timeout or time.time() - w0 > wall_cap:
                 return False, max_err
             time.sleep(0.02)
         return False, max_err
@@ -1029,6 +1072,7 @@ class PendantBridge(object):
                                          "state": "pending", "t_s": None, "plan_s": None, "note": None} for s in steps],
                               "cycle_time_s": 0.0})
             self.task_t0 = time.time()
+            self.task_t0_sim = rospy.get_time()
         rospy.loginfo("pendant_bridge: task '%s' started (%d steps) — %s", task_name, len(steps), GRASP_NOTE)
         ok = False
         try:
@@ -1069,7 +1113,8 @@ class PendantBridge(object):
             self.speed_pct = saved_speed
             with self.lock:
                 self.task["running"] = False
-                self.task["last_cycle_time_s"] = round(time.time() - self.task_t0, 2)
+                self.task["last_cycle_time_s"] = round(time.time() - self.task_t0, 2)          # wall clock
+                self.task["last_cycle_time_sim_s"] = round(rospy.get_time() - self.task_t0_sim, 2)   # simulation clock
                 self.task["cycle_time_s"] = self.task["last_cycle_time_s"]
                 self.task["count"] += 1
             rospy.loginfo("pendant_bridge: task '%s' finished: %s (%.1fs)", task_name,
@@ -1473,6 +1518,7 @@ class PendantBridge(object):
                 "estop": self.estop,
                 "estop_is_simulation_only": True,
                 "speed": self.speed_pct,
+                "sim": {"use_sim_time": self.use_sim_time, "rtf": self.rtf, "sim_time": round(rospy.get_time(), 2)},
                 "last_cmd": dict(self.last_cmd),
                 "last_error": self.last_error,
                 "live_deg": [round(v, 2) for v in rad2deg(live)] if live else None,

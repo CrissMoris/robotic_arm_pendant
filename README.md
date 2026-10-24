@@ -76,6 +76,10 @@ Simulation limitations (also published in `/pendant/robot_info.limitations`):
 - E-STOP during `PLANNING` takes effect when the planner returns (≤ 5 s); the trajectory is never sent. While the
   worker is still stopping, an E-STOP reset is rejected ("worker still stopping — retry"); the latched ESTOP state is
   never replaced by FAILED/STOPPED, and a reset never resumes a task. The web E-STOP is a simulation stop only.
+- Execution, arrival and gripper timeouts are measured in **simulation time** (`/clock`), so a slow Gazebo (real-time
+  factor below 1, typical in a VM) does not cause false "execution timeout" failures; a wall-clock cap (4× the timeout,
+  at least 30 s) still ends the wait if the simulation is paused. The measured RTF is published in `status.sim.rtf`
+  and shown on the pendant (RTF chip; red below 0.5). Cycle times are reported both in wall and simulation seconds.
 
 ---
 

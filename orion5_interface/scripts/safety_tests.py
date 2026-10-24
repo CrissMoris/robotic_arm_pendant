@@ -521,6 +521,15 @@ class Ctx(object):
     def status(self):
         return self.rec.get() or {}
 
+    def rtf(self):
+        """Gazebo real-time factor reported by the bridge (1.0 if unknown)."""
+        r = ((self.status().get("sim") or {}).get("rtf"))
+        return float(r) if r else 1.0
+
+    def win(self, seconds):
+        """Wall-clock window for a check that is specified in simulation seconds (scaled by the real-time factor)."""
+        return seconds / max(0.2, min(1.0, self.rtf()))
+
     def taught(self, name):
         tp = (self.info().get("taught_poses") or {}).get(name)
         return tp
@@ -859,15 +868,16 @@ def test_d5(ctx):
     if not substep(rec, "motion_in_progress", bool(moving), "state EXECUTING with joint velocity observed"):
         ctx.bridge.send({"cmd": "stop"})
         return finish(rec, t0, "FAIL", "move never reached EXECUTING with velocity", "no motion to interrupt", "motion_in_progress")
-    time.sleep(1.0)
-    # 3. E-STOP
+    time.sleep(ctx.win(1.0))
+    # 3. E-STOP  (windows are given in simulation seconds and scaled by the measured real-time factor)
+    rtf = ctx.rtf()
     t_es = time.time()
     ctx.bridge.send({"cmd": "estop", "active": True})
-    es = ctx.rec.wait_for(lambda s: s.get("estop") and s.get("state") == "ESTOP", 1.0)
+    es = ctx.rec.wait_for(lambda s: s.get("estop") and s.get("state") == "ESTOP", ctx.win(1.0))
     t_state = round(time.time() - t_es, 2)
     t_v = time.time()
     stopped = False
-    while time.time() - t_v < 1.5:
+    while time.time() - t_v < ctx.win(1.5):
         _, vel = ctx.watch.current()
         if max(abs(v) for v in vel) < ctx.vel_tol:
             stopped = True
@@ -875,7 +885,7 @@ def test_d5(ctx):
         time.sleep(0.02)
     t_stop = round(time.time() - t_es, 2)
     ctx.watch.rebase()
-    time.sleep(1.0)
+    time.sleep(ctx.win(1.0))
     pos_a, _ = ctx.watch.current()
     hold = ctx.watch.snapshot(stop=False)["max_joint_delta_deg"] < math.degrees(ctx.joint_tol)
     stx = ctx.status()
@@ -917,8 +927,8 @@ def test_d5(ctx):
     rec["plan_success"] = True
     rec["execution_success"] = bool(es) and preempted and stopped and resumed
     checks = [bool(es), preempted, stopped, hold, rej, reset_ok and bool(idle), resumed]
-    actual = "ESTOP in %.2fs, goal %s, stopped in %.2fs, hold %s, rejected %s, reset %s (retries %d), resumed %s" % (
-        t_state, (stx.get("exec") or {}).get("goal_status"), t_stop, hold, rej, reset_ok, retries, resumed)
+    actual = "ESTOP in %.2fs, goal %s, stopped in %.2fs (wall, RTF %.2f), hold %s, rejected %s, reset %s (retries %d), resumed %s" % (
+        t_state, (stx.get("exec") or {}).get("goal_status"), t_stop, rtf, hold, rej, reset_ok, retries, resumed)
     if all(checks):
         return finish(rec, t0, "PASS", actual)
     failed = [s["name"] for s in rec["substeps"] if not s["ok"]]
@@ -1007,6 +1017,8 @@ def environment(ctx, report):
                    "task_requirements": info.get("task_requirements"), "joints": info.get("joints"),
                    "estop_is_simulation_only": True},
         "bridge_params": ctx.params,
+        "sim": {"rtf_at_start": ctx.rtf(), "use_sim_time": bool((st.get("sim") or {}).get("use_sim_time")),
+                "note": "bridge timeouts are measured in simulation time; runner windows are scaled by RTF"},
         "moveit": {"planning_frame": ctx.probe.group.get_planning_frame() if ctx.probe else None, "eef_link": EEF_LINK},
         "controller": CONTROLLER})
 

@@ -232,6 +232,7 @@ table.mon td.err{color:var(--amber);}
         <div class="chip">DURUM<b id="chip-state">—</b></div>
         <div class="chip">BRIDGE<b id="chip-bridge">—</b></div>
         <div class="chip">SPEED<b id="chip-speed">30%</b></div>
+        <div class="chip" title="Gazebo gerçek zaman çarpanı (sim s / gerçek s)">RTF<b id="chip-rtf">—</b></div>
       </div>
     </div>
     <div class="topbar-right">
@@ -778,6 +779,10 @@ function onBridgeStatus(st){
   document.getElementById('sv-coll').title = (c.contacts||[]).join(', ');
   document.getElementById('sv-err').textContent = st.last_error || '—';
   document.getElementById('chip-state').textContent = st.state;
+  const sim=st.sim||{}; const rtfEl=document.getElementById('chip-rtf');
+  rtfEl.textContent = sim.rtf!=null ? sim.rtf.toFixed(2) : '—';
+  rtfEl.style.color = sim.rtf!=null && sim.rtf<0.5 ? 'var(--red)' : (sim.rtf!=null && sim.rtf<0.8 ? 'var(--amber)' : 'var(--text)');
+  if(sim.rtf!=null && sim.rtf<0.5 && !onBridgeStatus._rtfWarned){ onBridgeStatus._rtfWarned=true; appendLog('Gazebo yavaş çalışıyor (RTF '+sim.rtf.toFixed(2)+'): hareketler gerçek zamandan uzun sürer; zaman aşımları simülasyon saatiyle ölçülür.','warn'); }
 
   // jog page
   document.getElementById('jog-grip').textContent = (g.state||'—')+(g.angle_deg!=null?' ('+g.angle_deg+'°)':'')+(g.reached===false?' — ULAŞILAMADI':'');
@@ -798,7 +803,7 @@ function onBridgeStatus(st){
   document.getElementById('run-task-name').textContent = t.name||'—';
   document.getElementById('run-step').textContent = t.step_index>=0 ? (t.step_index+1)+'/'+t.step_count+' — '+(t.step_name||'') : '—';
   document.getElementById('run-state').textContent = st.state;
-  document.getElementById('run-cycle').textContent = t.running ? t.cycle_time_s+' s' : (t.last_cycle_time_s!=null ? t.last_cycle_time_s+' s (son)' : '—');
+  document.getElementById('run-cycle').textContent = t.running ? t.cycle_time_s+' s' : (t.last_cycle_time_s!=null ? t.last_cycle_time_s+' s gerçek'+(t.last_cycle_time_sim_s!=null?' / '+t.last_cycle_time_sim_s+' s sim':'')+' (son)' : '—');
   document.getElementById('run-result').textContent = t.result ? t.result+(t.message?' — '+t.message:'') : '—';
   document.getElementById('run-count').textContent = t.count!=null ? t.count : '—';
   const ob=(st.object||{}).cup;
@@ -1113,6 +1118,7 @@ function renderMonitor(st){
     <div class="k">Çevrim süresi</div><div class="v">${t.running?t.cycle_time_s+' s (sürüyor)':(t.last_cycle_time_s!=null?t.last_cycle_time_s+' s (son) · '+t.count+' çevrim':'—')}</div>
     <div class="k">Sahne / pozlar</div><div class="v">${escapeHtml((st.workcell_loaded||[]).join(', ')||'—')} · ${st.taught_count!=null?st.taught_count+' öğretilmiş poz':''}</div>
     <div class="k">Hız</div><div class="v">${st.speed!=null?st.speed+'%':'—'}</div>
+    <div class="k">Simülasyon</div><div class="v">${(st.sim||{}).rtf!=null?'RTF '+st.sim.rtf.toFixed(2):'RTF —'} ${(st.sim||{}).use_sim_time?'· zaman aşımları sim saatiyle':''}</div>
     <div class="k">Son hata</div><div class="v">${escapeHtml(st.last_error||'—')}</div>`;
 }
 
