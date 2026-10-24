@@ -164,6 +164,9 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);font-si
 .trace-line.active .tt{color:#fff;}
 .trace-line.done{color:var(--green);}
 .trace-line.failed{color:var(--red);}
+.trace-line.skipped{color:var(--text3);font-style:italic;}
+.trace-line .tn{font-size:10px;color:var(--text3);margin-left:6px;font-style:normal;}
+.trace-line.active .tn{color:#dbe6ff;}
 
 .req-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
 .req{font-size:11px;padding:4px 9px;border-radius:8px;border:1px solid var(--border);font-family:var(--mono);}
@@ -338,6 +341,7 @@ table.mon td.err{color:var(--amber);}
           <button class="rb up" onclick="cmdNamed('READY')" id="btn-ready"><i class="ti ti-arrow-up"></i>READY<br><small>(öğretilmiş)</small></button>
           <button class="rb pack" onclick="cmdGoTarget()"><i class="ti ti-target-arrow"></i>Hedefe git<br><small>(MoveIt)</small></button>
         </div>
+        <div class="note warn" id="ready-warn" style="display:none;margin-bottom:10px;">READY pozu HOME ile aynı tekil duruşta öğretilmiş (tüm eklemler ≈ 0°). Kartezyen hareketler buradan başlayamaz; masanın üstünde yeni bir READY öğretin (Teach).</div>
         <div class="p-title" style="font-size:13px;margin-bottom:6px;"><i class="ti ti-hand-grab" style="font-size:15px;"></i>MC1 Gripper</div>
         <div class="btn-grid" style="grid-template-columns:1fr 1fr;margin-bottom:10px;">
           <button class="rb open" onclick="cmdGripper('open')"><i class="ti ti-arrows-horizontal"></i>Aç</button>
@@ -364,7 +368,7 @@ table.mon td.err{color:var(--amber);}
         </div>
         <div class="cart-grid" id="cart-grid"></div>
         <div class="kv" style="margin-top:10px;"><div class="k">Sonuç</div><div class="v" id="cart-result">—</div></div>
-        <div class="note" style="margin-top:6px;">X/Y/Z: base_link ekseni · Rx/Ry/Rz: takım (tool) ekseni. Her tık = MoveIt doğrusal yol (çarpışma kontrollü) + yürütme. HOME tekil nokta (dirsek+bilek) — önce READY'ye gidin.</div>
+        <div class="note" id="cart-hint" style="margin-top:6px;">X/Y/Z: base_link ekseni · Rx/Ry/Rz: takım (tool) ekseni. Her tık = MoveIt doğrusal yol (çarpışma kontrollü) + yürütme.</div>
       </div>
       <!-- Teach (Phase C3) -->
       <div class="panel">
@@ -417,6 +421,8 @@ table.mon td.err{color:var(--amber);}
         <div class="prog">
           <div class="prog-pills" id="prog-pills"></div>
           <div class="prog-lbl" id="prog-lbl">—</div>
+          <div class="p-title" style="font-size:13px;margin-top:14px;margin-bottom:6px;"><i class="ti ti-history" style="font-size:15px;"></i>Son çevrimler <span class="note" id="hist-file"></span></div>
+          <table class="mon"><thead><tr><th>Zaman</th><th>Görev</th><th>Sonuç</th><th>Süre s (gerçek / sim)</th><th>Hata adımı</th><th>Bardak</th></tr></thead><tbody id="hist-rows"><tr><td colspan="6" class="note">—</td></tr></tbody></table>
         </div>
       </div>
     </div>
@@ -712,6 +718,11 @@ function onRobotInfo(info){
   document.getElementById('dash-task').textContent = names.join(', ') || 'yok';
   document.getElementById('set-limitations').innerHTML = (info.limitations||[]).map(l=>'• '+escapeHtml(l)).join('<br>') || '—';
   document.getElementById('btn-ready').disabled = !(info.taught_poses && info.taught_poses.READY);
+  const rd = info.taught_poses && info.taught_poses.READY;
+  const readySingular = !!(rd && (rd.joints_deg||[]).length===6 && rd.joints_deg.every(v=>Math.abs(v)<5));
+  document.getElementById('ready-warn').style.display = readySingular ? 'block' : 'none';
+  if(readySingular && !onRobotInfo._readyWarned){ onRobotInfo._readyWarned=true; appendLog('Uyarı: READY, HOME tekil duruşuyla aynı öğretilmiş; masa üstünde yeni bir READY öğretilmesi önerilir.','warn'); }
+  document.getElementById('hist-file').textContent = info.task_history_file ? '· '+info.task_history_file : '';
   if(first){
     appendLog('Planlama sahnesi: '+((info.workcell_loaded||[]).join(', ')||'boş'),'sys');
     if(info.estop_is_simulation_only) appendLog('Not: E-STOP yalnızca simülasyon durdurmasıdır (güvenlik sınıfı değildir).','warn');
@@ -806,6 +817,8 @@ function onBridgeStatus(st){
   document.getElementById('run-cycle').textContent = t.running ? t.cycle_time_s+' s' : (t.last_cycle_time_s!=null ? t.last_cycle_time_s+' s gerçek'+(t.last_cycle_time_sim_s!=null?' / '+t.last_cycle_time_sim_s+' s sim':'')+' (son)' : '—');
   document.getElementById('run-result').textContent = t.result ? t.result+(t.message?' — '+t.message:'') : '—';
   document.getElementById('run-count').textContent = t.count!=null ? t.count : '—';
+  const hist=st.task_history||[];
+  document.getElementById('hist-rows').innerHTML = hist.length ? hist.slice().reverse().map(h=>`<tr><td>${escapeHtml((h.time||'').slice(11))}</td><td>${escapeHtml(h.task||'')}</td><td style="color:${h.result==='ok'?'var(--green)':'var(--red)'}">${escapeHtml(h.result||'')}</td><td>${h.cycle_time_s!=null?h.cycle_time_s:'—'} / ${h.cycle_time_sim_s!=null?h.cycle_time_sim_s:'—'}</td><td>${escapeHtml(h.failure_step||'—')}</td><td>${h.object_at_place===true?'pad üzerinde':(h.object_at_place===false?'pad üzerinde değil':'—')}</td></tr>`).join('') : '<tr><td colspan="6" class="note">—</td></tr>';
   const ob=(st.object||{}).cup;
   document.getElementById('run-object').textContent = ob ? ((ob.attached?'gripper\'a bağlı':'serbest')+(ob.at_start?' · başlangıçta':'')+(ob.at_place?' · pad üzerinde':'')+(ob.pose_base?' · ('+ob.pose_base.map(v=>v.toFixed(2)).join(', ')+')':'')+(ob.attacher_available?'':' · attacher YOK')) : '—';
   document.getElementById('run-status-label').textContent = t.running ? 'Running' : 'Stopped';
@@ -1066,7 +1079,7 @@ function buildJointUI(){
 
 function buildTraceList(steps){
   document.getElementById('trace-list').innerHTML = steps.length ? steps.map((s,i)=>`
-    <div class="trace-line ${s.state||''}" id="trace-${i}">${i+1}. ${escapeHtml(s.name)}<span class="tt">${s.t_s!=null?s.t_s+' s':''}</span></div>`).join('') : '<div class="note">Görev adımı yok.</div>';
+    <div class="trace-line ${s.state||''}" id="trace-${i}" title="${escapeHtml(s.note||'')}">${i+1}. ${escapeHtml(s.name)}${s.state==='skipped'?'<span class="tn">atlandı</span>':''}${s.note?'<span class="tn">'+escapeHtml(String(s.note)).slice(0,72)+'</span>':''}<span class="tt">${s.t_s!=null?s.t_s+' s':''}</span></div>`).join('') : '<div class="note">Görev adımı yok.</div>';
   document.getElementById('prog-pills').innerHTML = steps.map((s,i)=>`<div class="pill ${s.state==='pending'?'':(s.state||'')}" id="p${i}"></div>`).join('');
 }
 
@@ -1086,6 +1099,17 @@ function renderAll(){
     if(me) me.textContent=(v-jointTargetDegs[i]).toFixed(2);
     if(mv) mv.textContent=jointVelLive[i].toFixed(1); if(mf) mf.textContent=jointEffLive[i].toFixed(2);
   });
+  const ch=document.getElementById('cart-hint');
+  if(ch){
+    const nearHome = targetInitialized && jointDegsLive.every(v=>Math.abs(v)<5);
+    if(nearHome !== renderAll._nearHome){
+      renderAll._nearHome = nearHome;
+      ch.className = nearHome ? 'note warn' : 'note';
+      ch.textContent = nearHome
+        ? 'Robot HOME tekil duruşunda (dirsek + bilek): Kartezyen jog burada başarısız olabilir; önce READY veya öğretilmiş bir poza gidin.'
+        : 'X/Y/Z: base_link ekseni · Rx/Ry/Rz: takım (tool) ekseni. Her tık = MoveIt doğrusal yol (çarpışma kontrollü) + yürütme.';
+    }
+  }
   jointVelLive.forEach((v,i)=>{
     const p=Math.min(100, Math.abs(v)/90*100).toFixed(1);
     const b=document.getElementById('vbar'+i), t=document.getElementById('vval'+i);

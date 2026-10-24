@@ -17,8 +17,9 @@
   <arg name="rosbridge_port" default="9090"/>
   <arg name="pendant_bridge" default="true" doc="Start the pendant bridge node (MoveIt executor)"/>
   <arg name="bridge_config"  default="$(find orion5_interface)/config/pendant_bridge.yaml"/>
-  <arg name="task_config"    default="$(find orion5_interface)/config/barista_task.yaml"/>
+  <arg name="task_config"    default="$(find orion5_interface)/config/tasks.yaml" doc="Task definitions (barista, inspection_tour, ...)"/>
   <arg name="taught_poses"   default="$(find orion5_interface)/config/taught_poses.yaml" doc="Written by the Teach function"/>
+  <arg name="task_history"   default="$(find orion5_interface)/logs/task_history.csv" doc="Every finished task cycle is appended here (CSV)"/>
 
   <!-- 1. Gazebo + robot (arm + MC1) + ros_control controllers + gripper service + robot_state_publisher -->
   <include file="$(find orion5_description)/launch/gazebo_robot_mc1.launch">
@@ -53,6 +54,7 @@
     <rosparam file="$(arg bridge_config)" command="load"/>
     <rosparam file="$(arg task_config)"   command="load"/>
     <param name="taught_poses_file" value="$(arg taught_poses)"/>
+    <param name="task_history_file" value="$(arg task_history)"/>
   </node>
 
 </launch>

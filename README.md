@@ -32,7 +32,8 @@ safety-rated E-STOP. Gripper "CLOSED" means the fingers reached the closed angle
 |---|---|
 | Gazebo workcell (pedestal, table, cup, coffee machine, place pad) | `orion5_description/world/barista.world` (robot spawned at `z:=0.4`) |
 | MoveIt planning-scene objects (floor, pedestal, table, coffee_machine, place_pad) + gripper envelope | `orion5_interface/config/pendant_bridge.yaml` (`workcell:`, `gripper_envelope:`), base_link frame, `z_base = z_gazebo - 0.40` |
-| Task definition (18 steps, Phase D + E) | `orion5_interface/config/barista_task.yaml` |
+| Task definitions (`barista`, 18 steps; `inspection_tour`) | `orion5_interface/config/tasks.yaml` |
+| Task history (every finished cycle, CSV) | `orion5_interface/logs/task_history.csv` (launch arg `task_history`; not versioned) |
 | Cup object settings (start/place pose, attachment) | `orion5_interface/config/pendant_bridge.yaml` (`objects:`) |
 | Taught poses (written by the pendant **Teach** button) | `orion5_interface/config/taught_poses.yaml` |
 | Verification helper | `rosrun orion5_interface pendant_status.py [keys…] | --watch task | --info` |
@@ -64,6 +65,18 @@ the joint, and `VERIFY_PLACE` measures that the cup rests on the place pad (tole
 Run page shows the cup state (`attached`, `at_start`, `at_place`, pose) and offers "Sahneyi sıfırla" (`reset_scene`)
 and "Bardağı çöz" (`detach`). The bridge status carries `object.cup`. A failed or stopped task never detaches or
 moves the cup on its own.
+
+Task history: every finished cycle (ok, failed or stopped) is appended to `orion5_interface/logs/task_history.csv`
+with time, task, result, cycle time (wall and simulation seconds), speed, failure step, message, cup outcome
+(`object_at_place`), RTF and a per-step summary. The last ten records are published in `status.task_history` and
+listed on the pendant Run page ("Son çevrimler"); the CSV is the source for measurement tables.
+
+`inspection_tour` task: visits the operator-taught points `INSPECT_1`, `INSPECT_2`, `INSPECT_3` in sequence and, at each
+one, measures the TCP against the taught pose (`verify_tcp`, default tolerance 10 mm / 3°); ends at HOME. It is the
+ready-made motion-accuracy check for a future physical robot; teach the three points with the pendant first.
+
+Pendant: the task trace shows skipped steps and step notes; a warning appears when the taught READY pose coincides with
+the HOME singularity; the Cartesian jog hint turns into a warning while the robot is at HOME.
 
 Simulation limitations (also published in `/pendant/robot_info.limitations`):
 - The cup is carried by a **kinematic link attachment**, not by finger contact forces (the MC1 fingers have no

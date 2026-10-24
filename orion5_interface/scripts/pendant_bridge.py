@@ -29,6 +29,8 @@ Limitations (simulation):
     the planning scene stands in for the gripper (planning only, not Gazebo physics).
 """
 
+import collections
+import csv
 import json
 import math
 import os
@@ -79,6 +81,8 @@ ENVELOPE_NAME = "gripper_envelope"
 ATTACH_SERVICE = "/link_attacher_node/attach"
 DETACH_SERVICE = "/link_attacher_node/detach"
 SET_MODEL_STATE_SERVICE = "/gazebo/set_model_state"
+HISTORY_COLS = ["time", "task", "result", "cycle_time_s", "cycle_time_sim_s", "speed_pct", "steps_total", "steps_done",
+                "failure_step", "message", "object_at_place", "object_attached", "rtf", "steps"]
 
 STATE_IDLE = "IDLE"
 STATE_PLANNING = "PLANNING"
@@ -203,6 +207,10 @@ class PendantBridge(object):
         self.wall_cap_factor = float(rospy.get_param("~wall_cap_factor", 4.0))
         self.rtf = None                      # measured real-time factor (sim seconds per wall second), None until sampled
         self._rtf_sample = None
+        # Task history: every finished cycle is appended to a CSV (operator record / measurement source) and the last
+        # entries are published in the status (task_history).
+        self.history_file = rospy.get_param("~task_history_file", "")
+        self.history = collections.deque(maxlen=20)
         self.objects = {str(o["name"]): o for o in (rospy.get_param("~objects", []) or []) if o.get("name")}
 
         self.limits = load_urdf_limits()
@@ -345,8 +353,8 @@ class PendantBridge(object):
                 entries.append((str(s["pose"]).upper(), s["pose"], False))
             if t == "named_if_needed" and s.get("unless_reachable"):
                 entries.append((str(s["unless_reachable"]).upper(), s["unless_reachable"], False))
-            if t == "cartesian_to" and s.get("pose"):
-                entries.append((str(s["pose"]).upper(), s["pose"], True))
+            if t in ("cartesian_to", "verify_tcp") and s.get("pose"):
+                entries.append((str(s["pose"]).upper(), s["pose"], True))      # needs a taught pose with a stored TCP
         for p, raw, needs_tcp in entries:
             if p not in required:
                 required.append(p)
@@ -382,6 +390,7 @@ class PendantBridge(object):
                                 "place_xyz_base": o.get("place_xyz_base"), "tolerance_m": o.get("tolerance_m", 0.03)}
                             for n, o in self.objects.items()},
                 "attacher_available": self.attach_srv is not None,
+                "task_history_file": self.history_file,
                 "eef_link": EEF_LINK, "ref_frame": REF_FRAME,
                 "estop_is_simulation_only": True,
                 "limitations": ["simulation E-STOP only (not safety-rated)",
@@ -1052,7 +1061,7 @@ class PendantBridge(object):
                 else:
                     self.gripper["state"] = "UNKNOWN"
 
-    # ---- task runner (steps from ~tasks, see config/barista_task.yaml) -----
+    # ---- task runner (steps from ~tasks, see config/tasks.yaml) -----
     def run_task(self, task_name):
         task = self.tasks.get(task_name)
         if not task:
@@ -1111,15 +1120,53 @@ class PendantBridge(object):
             raise
         finally:
             self.speed_pct = saved_speed
+            obj_now = self.object_status()           # outside the lock (object_pose_base locks itself)
             with self.lock:
                 self.task["running"] = False
                 self.task["last_cycle_time_s"] = round(time.time() - self.task_t0, 2)          # wall clock
                 self.task["last_cycle_time_sim_s"] = round(rospy.get_time() - self.task_t0_sim, 2)   # simulation clock
                 self.task["cycle_time_s"] = self.task["last_cycle_time_s"]
                 self.task["count"] += 1
-            rospy.loginfo("pendant_bridge: task '%s' finished: %s (%.1fs)", task_name,
-                          self.task["result"], self.task["last_cycle_time_s"])
+                if self.task["result"] is None:
+                    self.task["result"] = "error"
+                    self.task["message"] = self.task["message"] or self.last_error
+                row = self._history_row(task_name, obj_now)
+                self.history.append(row)
+            self._append_history(row)
+            rospy.loginfo("pendant_bridge: task '%s' finished: %s (%.1fs wall / %.1fs sim)", task_name,
+                          self.task["result"], self.task["last_cycle_time_s"], self.task["last_cycle_time_sim_s"])
         return ok
+
+    def _history_row(self, task_name, obj_now):
+        """One task-history record (called with self.lock held)."""
+        t = self.task
+        failed = [(i, s) for i, s in enumerate(t["steps"]) if s.get("state") == "failed"]
+        cup = (obj_now or {}).get("cup") or {}
+        return {"time": time.strftime("%Y-%m-%d %H:%M:%S"), "task": task_name, "result": t.get("result") or "error",
+                "cycle_time_s": t.get("last_cycle_time_s"), "cycle_time_sim_s": t.get("last_cycle_time_sim_s"),
+                "speed_pct": self.speed_pct, "steps_total": len(t["steps"]),
+                "steps_done": sum(1 for s in t["steps"] if s.get("state") in ("done", "skipped")),
+                "failure_step": ("%d:%s" % (failed[0][0] + 1, failed[0][1].get("name"))) if failed else None,
+                "message": t.get("message") or "", "object_at_place": cup.get("at_place"),
+                "object_attached": cup.get("attached"), "rtf": self.rtf,
+                "steps": "|".join("%s:%s:%s" % (s.get("name"), s.get("state"), s.get("t_s")) for s in t["steps"])}
+
+    def _append_history(self, row):
+        """Append one record to the task history CSV (header written when the file is created)."""
+        if not self.history_file:
+            return
+        try:
+            d = os.path.dirname(self.history_file)
+            if d:
+                os.makedirs(d, exist_ok=True)
+            new_file = not os.path.isfile(self.history_file)
+            with open(self.history_file, "a", newline="") as f:
+                w = csv.writer(f)
+                if new_file:
+                    w.writerow(HISTORY_COLS)
+                w.writerow([row.get(c) for c in HISTORY_COLS])
+        except Exception as exc:
+            rospy.logwarn("pendant_bridge: task history write failed (%s): %s", self.history_file, exc)
 
     def run_step(self, step):
         t = step.get("type")
@@ -1135,6 +1182,8 @@ class PendantBridge(object):
             return self.attach_object(step.get("object", "cup"))
         if t == "detach":
             return self.detach_object(step.get("object", "cup"))
+        if t == "verify_tcp":
+            return self.verify_tcp(step.get("pose", ""), float(step.get("tol_m", 0.01)), float(step.get("tol_deg", 3.0)))
         if t == "verify_object":
             return self.verify_object(step.get("object", "cup"), step.get("expect", "at_place"), step.get("tol_m"))
         if t == "named":
@@ -1449,6 +1498,29 @@ class PendantBridge(object):
         rospy.loginfo("pendant_bridge: VERIFY — %s", self.step_note)
         return True
 
+    def verify_tcp(self, pose_name, tol_m=0.01, tol_deg=3.0):
+        """Measured check: current TCP (eef_tcp_link) vs the taught pose's stored TCP (position and orientation)."""
+        key = str(pose_name).upper()
+        rec = self.taught.get(key)
+        if rec is None or not rec.get("tcp"):
+            self.set_state(STATE_FAILED, "verify_tcp: '%s' is not a taught pose with a stored TCP" % key)
+            return False
+        cur = self.current_tcp()
+        if cur is None:
+            self.set_state(STATE_FAILED, "verify_tcp: current TCP pose unavailable")
+            return False
+        ref = rec["tcp"]
+        dist = math.sqrt((cur["x"] - ref["x"]) ** 2 + (cur["y"] - ref["y"]) ** 2 + (cur["z"] - ref["z"]) ** 2)
+        dot = abs(sum(a * b for a, b in zip(cur["q"], ref["q"])))
+        ang = math.degrees(2.0 * math.acos(max(-1.0, min(1.0, dot))))
+        detail = "TCP error %.1f mm / %.2f deg vs %s (tol %.0f mm / %.1f deg)" % (dist * 1000.0, ang, key, tol_m * 1000.0, tol_deg)
+        if dist > tol_m or ang > tol_deg:
+            self.set_state(STATE_FAILED, "verify_tcp failed: " + detail)
+            return False
+        self.step_note = detail
+        rospy.loginfo("pendant_bridge: VERIFY_TCP — %s", detail)
+        return True
+
     # ---- stop / estop ------------------------------------------------------
     def _hold_controllers(self):
         """Empty trajectory = cancel current trajectory and hold position (JointTrajectoryController)."""
@@ -1535,6 +1607,7 @@ class PendantBridge(object):
                 "teach_last": self.teach_last,
                 "taught_count": len(self.taught),
                 "object": obj_status,
+                "task_history": list(self.history)[-10:],
                 "workcell_loaded": list(self.workcell_loaded),
             }
         st["tcp"] = self.current_tcp()

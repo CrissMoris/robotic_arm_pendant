@@ -1,4 +1,5 @@
-# Barista validation task for pendant_bridge.py (loaded into ~tasks). Phase D sequence + Phase E object handling.
+# Task definitions for pendant_bridge.py (loaded into ~tasks). Simulation validation tasks; the same definitions are
+# meant to be reused as ready-made test tasks when a physical robot is connected later.
 #
 # Step types:
 #   state_check      {}                                  no motion: fresh joint states, arm stationary, current state
@@ -16,24 +17,26 @@
 #                                                        (gazebo_ros_link_attacher); attach is refused if the TCP is not at
 #                                                        the object. Simulation substitute for a physics grasp.
 #   verify_object    {object, expect: lifted|at_place|at_start|attached, tol_m?}  measured check of the object pose
+#   verify_tcp       {pose, tol_m?, tol_deg?}            measured check: current TCP vs the taught pose's stored TCP
 #   cartesian_offset {dxyz, drpy_deg}  /  wait {seconds}
 #
-# Poses: HOME comes from named_poses (pendant_bridge.yaml). READY, PRE_PICK, PICK, PRE_PLACE and PLACE are the
-# operator-taught poses in taught_poses.yaml (pendant: Jog page -> Teach). Their values are referenced by name only and
-# are never modified by this file or by the bridge. run_task refuses to start while any of them is missing.
+# Poses: HOME comes from named_poses (pendant_bridge.yaml). All other poses are operator-taught (pendant: Jog page ->
+# Teach) and stored in taught_poses.yaml; they are referenced by name only and never modified here or by the bridge.
+# run_task refuses to start while any required pose is missing (the pendant Run page lists them).
 #
-# Sequence (18 steps): no leading HOME/READY motions, no TRANSFER return after the pick. SCENE_RESET makes every cycle
-# start with the cup at the pick point, so the task can be repeated (regression tests). The lift after the pick
-# (RETRACT_PICK) and the retract after the place (RETRACT_PLACE) are straight-line moves; the transfer
-# RETRACT_PICK -> PRE_PLACE is a collision-checked joint-space plan. VERIFY_LIFT proves the cup moved with the gripper,
-# VERIFY_PLACE proves it rests on the place pad. HOME is the mandatory final step of every successfully completed cycle.
-# A failed or stopped task performs no automatic motion and does NOT detach the cup; the operator decides
-# (pendant: "Sahneyi sıfırla" = reset_scene, or detach).
-#
-# Limitation: the cup is carried by a kinematic fixed joint, not by finger contact forces (the MC1 fingers have no
-# collision geometry). GRIPPER_CLOSE verifies the finger angle; ATTACH_CUP creates the joint.
+# Every finished cycle (ok / failed / stopped) is appended to the task history CSV (launch arg task_history, default
+# orion5_interface/logs/task_history.csv) with cycle times (wall and simulation), failure step and object outcome.
 
 tasks:
+
+  # ---------------------------------------------------------------------------------------------------------------
+  # Barista: pick the cup at the coffee machine side and place it on the service pad (18 steps).
+  # SCENE_RESET makes every cycle start with the cup at the pick point, so the task is repeatable. RETRACT_PICK and
+  # RETRACT_PLACE are straight-line moves; RETRACT_PICK -> PRE_PLACE is a collision-checked joint-space plan.
+  # VERIFY_LIFT proves the cup moved with the gripper, VERIFY_PLACE proves it rests on the pad. HOME is the mandatory
+  # final step of every successfully completed cycle. A failed or stopped task performs no automatic motion and does
+  # NOT detach the cup (pendant: "Sahneyi sıfırla" = reset_scene, or detach).
+  # Limitation: the cup is carried by a kinematic fixed joint, not by finger contact forces.
   barista:
     description: "Pick the cup at the coffee machine side and place it on the service pad (simulation validation, kinematic attachment)"
     steps:
@@ -55,3 +58,20 @@ tasks:
       - {name: RETRACT_PLACE,   type: cartesian_to,  pose: PRE_PLACE, speed: 15}
       - {name: VERIFY_PLACE,    type: verify_object, object: cup, expect: at_place}
       - {name: HOME,            type: named,         pose: HOME,      speed: 30}
+
+  # ---------------------------------------------------------------------------------------------------------------
+  # Inspection tour: visit operator-taught inspection points in sequence and measure the TCP pose at each one
+  # (motion accuracy check). Teach INSPECT_1, INSPECT_2, INSPECT_3 with the pendant before running; the tolerance
+  # per point is 10 mm / 3 deg by default. No object handling; HOME is the mandatory final step.
+  inspection_tour:
+    description: "Visit the taught inspection points in sequence and measure the TCP pose at each (motion accuracy)"
+    steps:
+      - {name: STATE_CHECK,     type: state_check}
+      - {name: READY_IF_NEEDED, type: named_if_needed, pose: READY, unless_reachable: INSPECT_1, speed: 30}
+      - {name: INSPECT_1,       type: named,      pose: INSPECT_1, speed: 30}
+      - {name: CHECK_1,         type: verify_tcp, pose: INSPECT_1, tol_m: 0.01, tol_deg: 3.0}
+      - {name: INSPECT_2,       type: named,      pose: INSPECT_2, speed: 30}
+      - {name: CHECK_2,         type: verify_tcp, pose: INSPECT_2, tol_m: 0.01, tol_deg: 3.0}
+      - {name: INSPECT_3,       type: named,      pose: INSPECT_3, speed: 30}
+      - {name: CHECK_3,         type: verify_tcp, pose: INSPECT_3, tol_m: 0.01, tol_deg: 3.0}
+      - {name: HOME,            type: named,      pose: HOME,      speed: 30}
