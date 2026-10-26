@@ -90,12 +90,16 @@ Files: `config/scenarios/<scenario>.yaml` (`scenario:`, `workcell:`, `objects:`,
 `config/pendant_bridge.yaml`. The pendant shows the loaded scenario in the top bar and on the Run page; task history rows
 carry the scenario name.
 
-Conveyor teach flow (same rule as Barista: no pose is hard-coded): start the conveyor scenario, run
-`rosrun orion5_interface find_task_poses.py --scenario conveyor` to get planning-only candidates for `CONV_PICK`,
-`CONV_PRE_PICK`, `CONV_PLACE`, `CONV_PRE_PLACE` (the tool seeds IK from `CONV_READY` if taught, otherwise from the current
-joint state), move to each candidate with the printed bridge command, check it in Gazebo/RViz and save it with Teach;
-finally teach `CONV_READY` as a non-singular pose above the belts. In this version the belts are static: the product is
-placed at the input pick point by `SCENE_RESET` at the start of every cycle; belt motion is a later stage.
+Conveyor pose setup, one command (no hand-coded values): with the conveyor scenario running,
+`rosrun orion5_interface find_task_poses.py --scenario conveyor --write-taught` computes a tool-down `CONV_READY`
+above the belts (`pose_search.ready_xyz`), searches candidates for `CONV_PICK` / `CONV_PLACE` and their `PRE_*` poses
+(`approach_dz` above), validates each with MoveIt (collision-free IK, planning-scene validity, 100 % straight approach
+path, OMPL plan from READY), selects the best feasible one per pose, writes them to
+`config/scenarios/conveyor_taught_poses.yaml` (existing poses are kept unless `--force`) and asks the running bridge to
+reload them (`reload_taught`). Then run `conveyor_pick_place` from the pendant: `VERIFY_LIFT` and `VERIFY_PLACE` are the
+measured validation in Gazebo. Without `--write-taught` the tool only prints candidates for a manual Teach. In this
+version the belts are static: the product is placed at the input pick point by `SCENE_RESET` at the start of every
+cycle; belt motion is a later stage.
 
 Simulation limitations (also published in `/pendant/robot_info.limitations`):
 - The cup is carried by a **kinematic link attachment**, not by finger contact forces (the MC1 fingers have no

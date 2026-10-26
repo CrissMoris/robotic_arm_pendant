@@ -26,6 +26,7 @@ Run while mery6_simulation.launch is up (move_group + pendant_bridge, so the pla
 
 import argparse
 import copy
+import json
 import math
 import os
 import sys
@@ -38,6 +39,7 @@ import yaml
 import moveit_commander
 from geometry_msgs.msg import Pose, PoseStamped
 from sensor_msgs.msg import JointState
+from std_msgs.msg import String
 from moveit_msgs.msg import MoveItErrorCodes
 from moveit_msgs.srv import GetPositionIK, GetPositionIKRequest, GetStateValidity, GetStateValidityRequest
 import tf.transformations as tft
@@ -295,6 +297,12 @@ def main():
     ap.add_argument("--top", type=int, default=3, help="candidates to print per pose")
     ap.add_argument("--ready-joints-deg", type=float, nargs=6, metavar="DEG",
                     help="use these joints as the reference instead of the taught pose (e.g. a validated candidate)")
+    ap.add_argument("--write-taught", action="store_true",
+                    help="select the best feasible candidate per pose (and a READY above the workcell from the scenario's "
+                         "pose_search.ready_xyz) and write them into the scenario's taught poses file, then ask the "
+                         "running bridge to reload them. Candidates are validated with MoveIt (IK, collision, straight "
+                         "approach path, OMPL plan); the first task run in Gazebo is the measured validation.")
+    ap.add_argument("--force", action="store_true", help="with --write-taught: overwrite poses that already exist in the file")
     args = ap.parse_args(rospy.myargv(argv=sys.argv)[1:])
 
     moveit_commander.roscpp_initialize([])
@@ -352,7 +360,30 @@ def main():
     print("Workcell (%s, z_base = z_gazebo - %.2f): %s" % (os.path.basename(world), z_off, wc))
     print("Targets (base_link): %s" % targets)
 
+    for k in ("approach_dz", "yaw_candidates_deg", "xy_offsets_m", "grasp_height_fraction"):
+        if k in ps:                               # scenario-level overrides of the search settings
+            cfg[k] = ps[k]
     finder = PoseFinder(cfg, ready_deg)
+    # --- automatic READY above the workcell (only with --write-taught and when the reference pose is not taught) ---
+    ready_auto = None
+    if args.write_taught and ready_tcp_q is None and ps.get("ready_xyz"):
+        q_down = [float(v) for v in tft.quaternion_from_euler(math.pi, 0.0, 0.0)]
+        rsol = finder.ik(pose_from(ps["ready_xyz"], q_down), [math.radians(v) for v in ready_deg])
+        if rsol is not None:
+            rvalid, rcontacts = finder.validity(rsol)
+            rplan, rdt = finder.plan_check([math.radians(v) for v in ready_deg], rsol)
+            if rvalid and rplan:
+                ready_auto = {"joints_deg": [round(math.degrees(v), 3) for v in rsol], "tcp": tcp_dict(ps["ready_xyz"], q_down),
+                              "stamp": time.time(), "source": "find_task_poses auto (ready_xyz, tool-down)"}
+                ready_deg = ready_auto["joints_deg"]
+                finder.ready_rad = list(rsol)
+                ready_tcp_q = q_down
+                print("%s candidate computed above the workcell at %s: %s (plan from current state %.2fs)" % (
+                    ready_name, ps["ready_xyz"], fmt_j(ready_deg), rdt))
+            else:
+                print("WARNING: %s candidate at %s rejected (valid=%s %s, plan=%s)" % (ready_name, ps["ready_xyz"], rvalid, rcontacts, rplan))
+        else:
+            print("WARNING: no collision-free IK for %s at %s — adjust pose_search.ready_xyz" % (ready_name, ps.get("ready_xyz")))
     print("Planning scene objects: %s  attached: %s" % (finder.scene_objects, finder.attached))
     if not finder.scene_objects:
         print("WARNING: planning scene is empty — start mery6_simulation.launch (pendant_bridge loads the workcell)")
@@ -373,6 +404,7 @@ def main():
                       "No grasp is simulated; the cup stays on the table.",
               "candidates": {}}
     best_cmds = []
+    chosen = {}          # target name -> (best feasible candidate, pre name)
     for name, t in targets.items():
         pre_name = t.get("pre", "PRE_" + name)
         print("\n=== %s at %s (and %s %.2f m above) ===" % (name, t["xyz"], pre_name, float(cfg.get("approach_dz", 0.08))))
@@ -395,6 +427,7 @@ def main():
                 print("     contacts: %s / %s" % (c["contacts"], c["pre_contacts"]))
         if feasible:
             b = feasible[0]
+            chosen[name] = (b, pre_name)
             best_cmds.append((pre_name, b["pre_joints_deg"]))
             best_cmds.append((name, b["joints_deg"]))
         else:
@@ -408,7 +441,51 @@ def main():
             yaml.safe_dump(report, f, sort_keys=False, allow_unicode=True)
         print("\nCandidates written to %s (taught poses file untouched)" % out_path)
 
-    if best_cmds:
+    if args.write_taught:
+        poses = {}
+        if ready_auto:
+            poses[ready_name] = ready_auto
+        for name, (b, pre_name) in chosen.items():
+            poses[name] = {"joints_deg": b["joints_deg"], "tcp": b["tcp"], "stamp": time.time(),
+                           "source": "find_task_poses auto (yaw %s)" % b["yaw_deg"]}
+            poses[pre_name] = {"joints_deg": b["pre_joints_deg"], "tcp": b["pre_tcp"], "stamp": time.time(),
+                               "source": "find_task_poses auto (pre, +%.2f m)" % float(cfg.get("approach_dz", 0.08))}
+        missing_targets = [n for n in targets if n not in chosen]
+        if missing_targets:
+            print("\nWARNING: no feasible candidate for %s — their poses were NOT written" % missing_targets)
+        if ready_tcp_q is None:
+            print("WARNING: %s is not available (not taught and no valid ready_xyz candidate) — the task's READY_IF_NEEDED "
+                  "step will need it" % ready_name)
+        existing = (load_yaml(taught_path).get("taught_poses") or {}) if os.path.isfile(taught_path) else {}
+        written, skipped = [], []
+        for k, v in poses.items():
+            if k in existing and not args.force:
+                skipped.append(k)
+                continue
+            existing[k] = v
+            written.append(k)
+        if written:
+            os.makedirs(os.path.dirname(taught_path), exist_ok=True)
+            tmp = taught_path + ".tmp"
+            with open(tmp, "w") as f:
+                f.write("# Taught poses (joints_deg + TCP of eef_tcp_link in base_link). Entries with source 'find_task_poses auto'\n"
+                        "# were selected by scripts/find_task_poses.py --write-taught (MoveIt-validated candidates); the pendant\n"
+                        "# Teach button overwrites them when the operator prefers a hand-taught pose.\n")
+                yaml.safe_dump({"taught_poses": existing}, f, sort_keys=False, allow_unicode=True)
+            os.replace(tmp, taught_path)
+            print("\nWROTE %s: %s" % (taught_path, ", ".join(written)))
+            try:
+                pub = rospy.Publisher("/pendant/cmd", String, queue_size=1, latch=True)
+                rospy.sleep(0.5)
+                pub.publish(String(data=json.dumps({"cmd": "reload_taught", "id": "ftp_reload"})))
+                print("bridge asked to reload the taught poses (/pendant/cmd reload_taught); if the bridge is not running, "
+                      "the poses are loaded at its next start")
+            except Exception as exc:
+                print("could not notify the bridge: %s" % exc)
+        if skipped:
+            print("kept existing poses (use --force to overwrite): %s" % ", ".join(skipped))
+        print("Next: run the task from the pendant — VERIFY_LIFT / VERIFY_PLACE measure the result in Gazebo.")
+    if best_cmds and not args.write_taught:
         print("\nTo verify a candidate in Gazebo, move there through the pendant bridge (collision-checked MoveIt plan),")
         print("watch the robot/RViz, then press Teach on the pendant with the pose name. Suggested order: "
               "PRE_* first, then the pose itself (straight-line Cartesian jog -Z also works for the last cm):")

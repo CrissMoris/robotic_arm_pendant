@@ -817,6 +817,13 @@ class PendantBridge(object):
         if name == "delete_taught":
             self.delete_taught(cmd)
             return
+        if name == "reload_taught":
+            # re-read the scenario's taught poses file (e.g. after find_task_poses.py --write-taught); read-only, no motion
+            with self.lock:
+                self.taught = self._load_taught()
+            self.publish_info()
+            self.set_result(cmd, "ok", "taught poses reloaded: %s" % ", ".join(sorted(self.taught.keys())))
+            return
         if name in ("attach", "detach", "reset_scene"):
             # Gazebo object handling (no robot motion). Allowed under E-STOP; refused while a job is running.
             if self.busy:

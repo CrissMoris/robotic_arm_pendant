@@ -35,9 +35,13 @@ objects:
 # Inputs for scripts/find_task_poses.py --scenario conveyor (candidate poses only; the operator teaches the final ones)
 pose_search:
   ready_pose: CONV_READY
+  ready_xyz: [0.45, 0.0, 0.30]           # CONV_READY candidate: tool-down between the belts, well above the product
+  approach_dz: 0.12                      # PRE_* poses this far straight above PICK/PLACE (box hangs 0.04 below the TCP)
   targets:
     CONV_PICK:  {xyz: [0.45, -0.30, 0.055], pre: CONV_PRE_PICK}
     CONV_PLACE: {xyz: [0.45,  0.30, 0.055], pre: CONV_PRE_PLACE}
+# One-command pose selection (MoveIt-validated candidates written to conveyor_taught_poses.yaml, bridge reloaded):
+#   rosrun orion5_interface find_task_poses.py --scenario conveyor --write-taught
 
 tasks:
   conveyor_pick_place:
