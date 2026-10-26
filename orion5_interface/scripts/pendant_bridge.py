@@ -81,8 +81,8 @@ ENVELOPE_NAME = "gripper_envelope"
 ATTACH_SERVICE = "/link_attacher_node/attach"
 DETACH_SERVICE = "/link_attacher_node/detach"
 SET_MODEL_STATE_SERVICE = "/gazebo/set_model_state"
-HISTORY_COLS = ["time", "task", "result", "cycle_time_s", "cycle_time_sim_s", "speed_pct", "steps_total", "steps_done",
-                "failure_step", "message", "object_at_place", "object_attached", "rtf", "steps"]
+HISTORY_COLS = ["time", "scenario", "task", "result", "cycle_time_s", "cycle_time_sim_s", "speed_pct", "steps_total",
+                "steps_done", "failure_step", "message", "object", "object_at_place", "object_attached", "rtf", "steps"]
 
 STATE_IDLE = "IDLE"
 STATE_PLANNING = "PLANNING"
@@ -192,7 +192,8 @@ class PendantBridge(object):
         default_taught = ""
         try:
             import rospkg
-            default_taught = os.path.join(rospkg.RosPack().get_path("orion5_interface"), "config", "taught_poses.yaml")
+            default_taught = os.path.join(rospkg.RosPack().get_path("orion5_interface"), "config", "scenarios",
+                                          "%s_taught_poses.yaml" % rospy.get_param("~scenario/name", "barista"))
         except Exception:
             pass
         self.taught_file = rospy.get_param("~taught_poses_file", default_taught)
@@ -212,6 +213,10 @@ class PendantBridge(object):
         self.history_file = rospy.get_param("~task_history_file", "")
         self.history = collections.deque(maxlen=20)
         self.objects = {str(o["name"]): o for o in (rospy.get_param("~objects", []) or []) if o.get("name")}
+        # Scenario metadata (config/scenarios/<name>.yaml): name, description, world. Shown on the pendant.
+        self.scenario = rospy.get_param("~scenario", {}) or {}
+        if not isinstance(self.scenario, dict):
+            self.scenario = {"name": str(self.scenario)}
 
         self.limits = load_urdf_limits()
 
@@ -391,6 +396,8 @@ class PendantBridge(object):
                             for n, o in self.objects.items()},
                 "attacher_available": self.attach_srv is not None,
                 "task_history_file": self.history_file,
+                "scenario": {"name": self.scenario.get("name"), "description": self.scenario.get("description"),
+                             "world": self.scenario.get("world")},
                 "eef_link": EEF_LINK, "ref_frame": REF_FRAME,
                 "estop_is_simulation_only": True,
                 "limitations": ["simulation E-STOP only (not safety-rated)",
@@ -1061,7 +1068,7 @@ class PendantBridge(object):
                 else:
                     self.gripper["state"] = "UNKNOWN"
 
-    # ---- task runner (steps from ~tasks, see config/tasks.yaml) -----
+    # ---- task runner (steps from ~tasks, see config/scenarios/<scenario>.yaml) -----
     def run_task(self, task_name):
         task = self.tasks.get(task_name)
         if not task:
@@ -1141,8 +1148,10 @@ class PendantBridge(object):
         """One task-history record (called with self.lock held)."""
         t = self.task
         failed = [(i, s) for i, s in enumerate(t["steps"]) if s.get("state") == "failed"]
-        cup = (obj_now or {}).get("cup") or {}
-        return {"time": time.strftime("%Y-%m-%d %H:%M:%S"), "task": task_name, "result": t.get("result") or "error",
+        obj_name = next(iter(obj_now or {}), None)             # the scenario's (first) handled object, if any
+        cup = (obj_now or {}).get(obj_name) or {}
+        return {"time": time.strftime("%Y-%m-%d %H:%M:%S"), "scenario": self.scenario.get("name"),
+                "task": task_name, "result": t.get("result") or "error", "object": obj_name,
                 "cycle_time_s": t.get("last_cycle_time_s"), "cycle_time_sim_s": t.get("last_cycle_time_sim_s"),
                 "speed_pct": self.speed_pct, "steps_total": len(t["steps"]),
                 "steps_done": sum(1 for s in t["steps"] if s.get("state") in ("done", "skipped")),
@@ -1608,6 +1617,7 @@ class PendantBridge(object):
                 "taught_count": len(self.taught),
                 "object": obj_status,
                 "task_history": list(self.history)[-10:],
+                "scenario": self.scenario.get("name"),
                 "workcell_loaded": list(self.workcell_loaded),
             }
         st["tcp"] = self.current_tcp()

@@ -1,15 +1,17 @@
-# pendant_bridge.py parameters (loaded into the node's private namespace).
-# Simulation only. No PID gains, no hardware settings here.
+# pendant_bridge.py common parameters (loaded into the node's private namespace). Scenario-specific parts
+# (world, workcell, objects, tasks, pose search targets) live in config/scenarios/<scenario>.yaml and are loaded by
+# mery6_simulation.launch after this file. Simulation only. No PID gains, no hardware settings here.
 
 status_rate: 10.0          # Hz, /pendant/status
 joint_tol_rad: 0.02        # completion check: |live - target| per joint (~1.1 deg)
 vel_tol_rad_s: 0.02        # completion check: joint must be (nearly) stopped
 settle_time: 0.2           # s, tolerance must hold this long
 default_speed_pct: 30      # MoveIt velocity/acceleration scaling (percent)
+wall_cap_factor: 4.0       # wall-clock cap = factor x (simulation-time) timeout, see README "simulation time"
 
 # MC1 gripper (degrees on the left finger joints, right joints are mirrored by the service).
 # Close direction verified in Gazebo (Phase B). "CLOSED" means the fingers reached this angle; the object itself is
-# carried by a kinematic link attachment (see objects: below), not by finger contact forces.
+# carried by a kinematic link attachment (see objects: in the scenario file), not by finger contact forces.
 gripper_open_deg: 0.0
 gripper_close_deg: 35.0
 gripper_time: 1.0
@@ -22,8 +24,8 @@ cartesian_min_fraction: 0.95          # jog only; task cartesian_to steps requir
 cartesian_max_joint_jump_rad: 0.35
 
 # Named joint poses in degrees. HOME = all zero (same as SRDF 'home', verified in Phase A).
-# Every other pose (READY, PRE_PICK, PICK, PRE_PLACE, PLACE, ...) is TAUGHT by the operator in Gazebo with the
-# pendant "Teach" button and stored in taught_poses.yaml (path: ~taught_poses_file, set by the launch file).
+# Every other pose is TAUGHT by the operator in Gazebo with the pendant "Teach" button and stored in the scenario's
+# taught poses file (config/scenarios/<scenario>_taught_poses.yaml, set by the launch file).
 named_poses:
   HOME: [0, 0, 0, 0, 0, 0]
 
@@ -35,29 +37,7 @@ gripper_envelope:
   size: [0.07, 0.07, 0.17]
   z_offset: 0.085
 
-# Workcell collision objects for the MoveIt planning scene, in base_link coordinates.
-# Rule: z_base = z_gazebo - 0.40 (robot spawned at z:=0.4 in orion5_description/world/barista.world).
-# The cup is deliberately NOT listed: it is the manipulation target.
-workcell:
-  - {name: floor,          shape: box, size: [3.0, 3.0, 0.01],  xyz: [0.0,  0.0, -0.405]}
-  - {name: pedestal,       shape: box, size: [0.20, 0.20, 0.38], xyz: [0.0,  0.0, -0.21]}    # top at -0.02: 2 cm gap to base_link
-  - {name: table,          shape: box, size: [0.60, 0.80, 0.03], xyz: [0.55, 0.0,  0.0]}     # top surface at +0.015
-  - {name: coffee_machine, shape: box, size: [0.20, 0.30, 0.40], xyz: [0.75, 0.0,  0.215]}
-  - {name: place_pad,      shape: box, size: [0.15, 0.15, 0.01], xyz: [0.42, 0.15, 0.02]}
-
-# Gazebo objects handled by task steps (scene_reset / attach / detach / verify_object). SIMULATION ONLY:
-# attach = kinematic fixed joint created by the gazebo_ros_link_attacher world plugin between the robot's gripper
-# link and the object link; it is not a physics grasp. Positions are in base_link (z_gazebo = z_base + gazebo_z_offset).
+# Gazebo robot model / frame rule shared by all scenarios (robot spawned at z:=0.4 on a 0.4 m pedestal).
 robot_model: orion5_v166               # Gazebo model name of the robot (spawn_model -model)
 gazebo_z_offset: 0.40
 gripper_link_candidates: [gripper_base, eef_link, link_6]   # Gazebo lumps fixed-joint links; first one present is used
-objects:
-  - name: cup
-    gazebo_model: cup
-    gazebo_link: link
-    start_xyz_base: [0.42, -0.15, 0.065]   # cup centre at the pick point (bottom on the table top at 0.015)
-    start_rpy_deg: [0, 0, 0]
-    place_xyz_base: [0.42, 0.15, 0.075]    # cup centre when resting on the place pad (top 0.025 + half height 0.05)
-    tolerance_m: 0.03                      # at_start / at_place acceptance (horizontal and vertical)
-    attach_radius_m: 0.08                  # attach is refused if the TCP is farther than this from the cup centre
-    min_lift_m: 0.03                       # verify_object expect: lifted -> cup centre must rise at least this much

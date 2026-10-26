@@ -236,6 +236,7 @@ table.mon td.err{color:var(--amber);}
         <div class="chip">BRIDGE<b id="chip-bridge">—</b></div>
         <div class="chip">SPEED<b id="chip-speed">30%</b></div>
         <div class="chip" title="Gazebo gerçek zaman çarpanı (sim s / gerçek s)">RTF<b id="chip-rtf">—</b></div>
+        <div class="chip" title="Yüklü senaryo (dünya + workcell + görevler)">SENARYO<b id="chip-scenario">—</b></div>
       </div>
     </div>
     <div class="topbar-right">
@@ -392,18 +393,19 @@ table.mon td.err{color:var(--amber);}
           <div class="vp-label" id="run-status-label">Stopped</div>
         </div>
         <div class="kv" style="margin-top:12px;">
+          <div class="k">Senaryo</div><div class="v" id="run-scenario">—</div>
           <div class="k">Görev</div><div class="v" id="run-task-name">—</div>
           <div class="k">Adım</div><div class="v" id="run-step">—</div>
           <div class="k">Durum</div><div class="v" id="run-state">—</div>
           <div class="k">Çevrim süresi</div><div class="v" id="run-cycle">—</div>
           <div class="k">Son sonuç</div><div class="v" id="run-result">—</div>
           <div class="k">Çevrim sayısı</div><div class="v" id="run-count">—</div>
-          <div class="k">Bardak</div><div class="v" id="run-object">—</div>
+          <div class="k">Nesne</div><div class="v" id="run-object">—</div>
         </div>
-        <div class="note warn" style="margin-top:10px;">Simülasyon sınırı: bardak, parmak teması ile değil kinematik bağlama ile (link attacher) taşınır; VERIFY_LIFT ve VERIFY_PLACE bardağın gerçekten kalktığını ve pad üzerine bırakıldığını ölçer. Başarısız/durdurulan görev bardağı otomatik bırakmaz.</div>
+        <div class="note warn" style="margin-top:10px;">Simülasyon sınırı: nesne (bardak, kutu vb.) parmak teması ile değil kinematik bağlama ile (link attacher) taşınır; VERIFY_LIFT ve VERIFY_PLACE nesnenin gerçekten kalktığını ve hedefe bırakıldığını ölçer. Başarısız/durdurulan görev nesneyi otomatik bırakmaz.</div>
         <div style="margin-top:8px;display:flex;gap:6px;">
-          <button class="c-btn" onclick="pendantCmd({cmd:'reset_scene', object:'cup'})"><i class="ti ti-refresh"></i> Sahneyi sıfırla (bardak başa)</button>
-          <button class="c-btn" onclick="pendantCmd({cmd:'detach', object:'cup'})"><i class="ti ti-link-off"></i> Bardağı çöz</button>
+          <button class="c-btn" onclick="pendantCmd({cmd:'reset_scene', object:firstObjectName()})"><i class="ti ti-refresh"></i> Sahneyi sıfırla (nesne başa)</button>
+          <button class="c-btn" onclick="pendantCmd({cmd:'detach', object:firstObjectName()})"><i class="ti ti-link-off"></i> Nesneyi çöz</button>
         </div>
       </div>
       <div class="panel">
@@ -422,7 +424,7 @@ table.mon td.err{color:var(--amber);}
           <div class="prog-pills" id="prog-pills"></div>
           <div class="prog-lbl" id="prog-lbl">—</div>
           <div class="p-title" style="font-size:13px;margin-top:14px;margin-bottom:6px;"><i class="ti ti-history" style="font-size:15px;"></i>Son çevrimler <span class="note" id="hist-file"></span></div>
-          <table class="mon"><thead><tr><th>Zaman</th><th>Görev</th><th>Sonuç</th><th>Süre s (gerçek / sim)</th><th>Hata adımı</th><th>Bardak</th></tr></thead><tbody id="hist-rows"><tr><td colspan="6" class="note">—</td></tr></tbody></table>
+          <table class="mon"><thead><tr><th>Zaman</th><th>Görev</th><th>Sonuç</th><th>Süre s (gerçek / sim)</th><th>Hata adımı</th><th>Nesne</th></tr></thead><tbody id="hist-rows"><tr><td colspan="6" class="note">—</td></tr></tbody></table>
         </div>
       </div>
     </div>
@@ -723,6 +725,10 @@ function onRobotInfo(info){
   document.getElementById('ready-warn').style.display = readySingular ? 'block' : 'none';
   if(readySingular && !onRobotInfo._readyWarned){ onRobotInfo._readyWarned=true; appendLog('Uyarı: READY, HOME tekil duruşuyla aynı öğretilmiş; masa üstünde yeni bir READY öğretilmesi önerilir.','warn'); }
   document.getElementById('hist-file').textContent = info.task_history_file ? '· '+info.task_history_file : '';
+  const scn=info.scenario||{};
+  document.getElementById('chip-scenario').textContent = scn.name||'—';
+  document.getElementById('run-scenario').textContent = scn.name ? scn.name+(scn.description?' — '+scn.description:'') : '—';
+  if(first && scn.name) appendLog('Senaryo: '+scn.name+(scn.world?' ('+scn.world+')':''),'sys');
   if(first){
     appendLog('Planlama sahnesi: '+((info.workcell_loaded||[]).join(', ')||'boş'),'sys');
     if(info.estop_is_simulation_only) appendLog('Not: E-STOP yalnızca simülasyon durdurmasıdır (güvenlik sınıfı değildir).','warn');
@@ -818,9 +824,9 @@ function onBridgeStatus(st){
   document.getElementById('run-result').textContent = t.result ? t.result+(t.message?' — '+t.message:'') : '—';
   document.getElementById('run-count').textContent = t.count!=null ? t.count : '—';
   const hist=st.task_history||[];
-  document.getElementById('hist-rows').innerHTML = hist.length ? hist.slice().reverse().map(h=>`<tr><td>${escapeHtml((h.time||'').slice(11))}</td><td>${escapeHtml(h.task||'')}</td><td style="color:${h.result==='ok'?'var(--green)':'var(--red)'}">${escapeHtml(h.result||'')}</td><td>${h.cycle_time_s!=null?h.cycle_time_s:'—'} / ${h.cycle_time_sim_s!=null?h.cycle_time_sim_s:'—'}</td><td>${escapeHtml(h.failure_step||'—')}</td><td>${h.object_at_place===true?'pad üzerinde':(h.object_at_place===false?'pad üzerinde değil':'—')}</td></tr>`).join('') : '<tr><td colspan="6" class="note">—</td></tr>';
-  const ob=(st.object||{}).cup;
-  document.getElementById('run-object').textContent = ob ? ((ob.attached?'gripper\'a bağlı':'serbest')+(ob.at_start?' · başlangıçta':'')+(ob.at_place?' · pad üzerinde':'')+(ob.pose_base?' · ('+ob.pose_base.map(v=>v.toFixed(2)).join(', ')+')':'')+(ob.attacher_available?'':' · attacher YOK')) : '—';
+  document.getElementById('hist-rows').innerHTML = hist.length ? hist.slice().reverse().map(h=>`<tr><td>${escapeHtml((h.time||'').slice(11))}</td><td>${escapeHtml(h.task||'')}</td><td style="color:${h.result==='ok'?'var(--green)':'var(--red)'}">${escapeHtml(h.result||'')}</td><td>${h.cycle_time_s!=null?h.cycle_time_s:'—'} / ${h.cycle_time_sim_s!=null?h.cycle_time_sim_s:'—'}</td><td>${escapeHtml(h.failure_step||'—')}</td><td>${h.object_at_place===true?'hedefte':(h.object_at_place===false?'hedefte değil':'—')}</td></tr>`).join('') : '<tr><td colspan="6" class="note">—</td></tr>';
+  const objName=Object.keys(st.object||{})[0]; const ob=objName?st.object[objName]:null;
+  document.getElementById('run-object').textContent = ob ? (objName+': '+(ob.attached?'gripper\'a bağlı':'serbest')+(ob.at_start?' · başlangıçta':'')+(ob.at_place?' · hedefte':'')+(ob.pose_base?' · ('+ob.pose_base.map(v=>v.toFixed(2)).join(', ')+')':'')+(ob.attacher_available?'':' · attacher YOK')) : '—';
   document.getElementById('run-status-label').textContent = t.running ? 'Running' : 'Stopped';
   if(t.steps && t.steps.length && (t.name===selectedTask || t.running)) buildTraceList(t.steps);
   document.getElementById('prog-lbl').textContent = t.running ? 'Adım '+(t.step_index+1)+'/'+t.step_count+' — '+(t.step_name||'')+' ['+st.state+']' : (t.result ? 'Son görev: '+t.result+(t.last_cycle_time_s!=null?' · '+t.last_cycle_time_s+' s':'') : '—');
@@ -867,6 +873,7 @@ function pendantCmd(obj, quiet){
   if(!quiet) appendLog('→ bridge: '+JSON.stringify(obj),'info');
   return obj.id;
 }
+function firstObjectName(){ const o=(bridgeStatus&&bridgeStatus.object)||{}; const k=Object.keys(o)[0]; if(!k) appendLog('Bu senaryoda taşınan nesne tanımlı değil','warn'); return k||'cup'; }
 function bridgeBusy(){
   return bridgeStatus && (bridgeStatus.state==='PLANNING' || bridgeStatus.state==='EXECUTING' || (bridgeStatus.task && bridgeStatus.task.running));
 }

@@ -12,7 +12,7 @@ What it does
     the PRE_* pose straight above it, the straight-line PRE -> target path (compute_cartesian_path fraction and
     joint-jump guard, the same criterion the task runner uses), an optional OMPL plan READY -> PRE_*,
     the joint distance from READY and whether the elbow/wrist branch matches READY
-  * prints a ranked report and writes config/pose_candidates.yaml (NOT taught_poses.yaml)
+  * prints a ranked report and writes config/scenarios/<scenario>_pose_candidates.yaml (NEVER the taught poses file)
 
 What it does NOT do
   * it never moves the robot and never writes taught_poses.yaml. The operator drives the robot to a chosen
@@ -37,6 +37,7 @@ import rospkg
 import yaml
 import moveit_commander
 from geometry_msgs.msg import Pose, PoseStamped
+from sensor_msgs.msg import JointState
 from moveit_msgs.msg import MoveItErrorCodes
 from moveit_msgs.srv import GetPositionIK, GetPositionIKRequest, GetStateValidity, GetStateValidityRequest
 import tf.transformations as tft
@@ -283,39 +284,57 @@ def fmt_j(j):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--config", default=os.path.join(pkg_path("orion5_interface"), "config", "pose_search.yaml"))
-    ap.add_argument("--taught", default=os.path.join(pkg_path("orion5_interface"), "config", "taught_poses.yaml"))
-    ap.add_argument("--out", default=os.path.join(pkg_path("orion5_interface"), "config", "pose_candidates.yaml"))
-    ap.add_argument("--no-write", action="store_true", help="only print, do not write pose_candidates.yaml")
+    ap.add_argument("--scenario", default="barista",
+                    help="scenario name: reads pose_search/objects/world from config/scenarios/<name>.yaml")
+    ap.add_argument("--config", default=os.path.join(pkg_path("orion5_interface"), "config", "pose_search.yaml"),
+                    help="search parameters (yaw candidates, approach height, IK settings)")
+    ap.add_argument("--taught", default=None, help="taught poses file (default: config/scenarios/<scenario>_taught_poses.yaml)")
+    ap.add_argument("--out", default=None, help="candidates file (default: config/scenarios/<scenario>_pose_candidates.yaml)")
+    ap.add_argument("--ready-name", default=None, help="name of the taught reference pose (default: scenario pose_search.ready_pose or READY)")
+    ap.add_argument("--no-write", action="store_true", help="only print, do not write the candidates file")
     ap.add_argument("--top", type=int, default=3, help="candidates to print per pose")
     ap.add_argument("--ready-joints-deg", type=float, nargs=6, metavar="DEG",
-                    help="use these READY joints instead of taught_poses.yaml (e.g. a validated candidate)")
+                    help="use these joints as the reference instead of the taught pose (e.g. a validated candidate)")
     args = ap.parse_args(rospy.myargv(argv=sys.argv)[1:])
 
     moveit_commander.roscpp_initialize([])
     rospy.init_node("find_task_poses", anonymous=True)
 
     cfg = load_yaml(args.config)
-    # --- READY ------------------------------------------------------------
+    sc_dir = os.path.join(pkg_path("orion5_interface"), "config", "scenarios")
+    sc_path = os.path.join(sc_dir, args.scenario + ".yaml")
+    sc = load_yaml(sc_path) if os.path.isfile(sc_path) else {}
+    ps = sc.get("pose_search") or {}
+    ready_name = str(args.ready_name or ps.get("ready_pose") or "READY").upper()
+    taught_path = args.taught or os.path.join(sc_dir, args.scenario + "_taught_poses.yaml")
+    out_path = args.out or os.path.join(sc_dir, args.scenario + "_pose_candidates.yaml")
+    print("Scenario: %s (%s)" % (args.scenario, sc_path if sc else "no scenario file found — using pose_search.yaml targets only"))
+
+    # --- reference pose (seed for IK, branch consistency) ---------------------
     ready_tcp_q = None
     if args.ready_joints_deg:
         ready_deg = list(args.ready_joints_deg)
-        print("READY from command line: %s" % fmt_j(ready_deg))
+        print("%s from command line: %s" % (ready_name, fmt_j(ready_deg)))
     else:
-        taught = (load_yaml(args.taught).get("taught_poses") or {}) if os.path.isfile(args.taught) else {}
-        if "READY" not in taught:
-            print("ERROR: no taught READY pose in %s — teach READY from the pendant first "
-                  "(or pass --ready-joints-deg)." % args.taught)
-            return 2
-        ready_deg = [float(v) for v in taught["READY"]["joints_deg"]]
-        ready_tcp_q = taught["READY"].get("tcp", {}).get("q")
-        print("READY (taught): %s  tcp=%s" % (fmt_j(ready_deg), taught["READY"].get("tcp")))
+        taught = (load_yaml(taught_path).get("taught_poses") or {}) if os.path.isfile(taught_path) else {}
+        if ready_name in taught:
+            ready_deg = [float(v) for v in taught[ready_name]["joints_deg"]]
+            ready_tcp_q = taught[ready_name].get("tcp", {}).get("q")
+            print("%s (taught): %s  tcp=%s" % (ready_name, fmt_j(ready_deg), taught[ready_name].get("tcp")))
+        else:
+            js = rospy.wait_for_message("/joint_states", JointState, timeout=10.0)
+            names = list(js.name)
+            ready_deg = [math.degrees(js.position[names.index(n)]) for n in ARM_JOINTS]
+            print("WARNING: no taught %s in %s — seeding IK from the CURRENT joint state %s and using the analytic "
+                  "tool-down orientation. Teach %s above the workcell for branch-consistent candidates." % (
+                      ready_name, taught_path, fmt_j(ready_deg), ready_name))
 
     # --- workcell targets ---------------------------------------------------
-    world = cfg.get("world_file") or os.path.join(pkg_path("orion5_description"), "world", "barista.world")
-    z_off = float(cfg.get("gazebo_z_offset", 0.40))
-    wc = read_workcell(world, z_off)
-    targets = dict(cfg.get("targets") or {})
+    world_name = (sc.get("scenario") or {}).get("world") or cfg.get("world_file") or "barista.world"
+    world = world_name if os.path.isabs(world_name) else os.path.join(pkg_path("orion5_description"), "world", world_name)
+    z_off = float((sc.get("scenario") or {}).get("spawn_z", cfg.get("gazebo_z_offset", 0.40)))
+    wc = read_workcell(world, z_off) if os.path.isfile(world) else {}
+    targets = dict(ps.get("targets") or cfg.get("targets") or {})
     if "PICK" not in targets and "cup" in wc:
         cup = wc["cup"]
         frac = float(cfg.get("grasp_height_fraction", 0.5))
@@ -382,11 +401,12 @@ def main():
             print("  -> no feasible candidate: adjust yaw_candidates_deg / xy_offsets_m / approach_dz in %s" % args.config)
 
     if not args.no_write:
-        with open(args.out, "w") as f:
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        with open(out_path, "w") as f:
             f.write("# Generated by find_task_poses.py — CANDIDATES ONLY, not used by pendant_bridge.py.\n")
             f.write("# Verify each pose in Gazebo/RViz (move there with the pendant), then save it with Teach.\n")
             yaml.safe_dump(report, f, sort_keys=False, allow_unicode=True)
-        print("\nCandidates written to %s (taught_poses.yaml untouched)" % args.out)
+        print("\nCandidates written to %s (taught poses file untouched)" % out_path)
 
     if best_cmds:
         print("\nTo verify a candidate in Gazebo, move there through the pendant bridge (collision-checked MoveIt plan),")

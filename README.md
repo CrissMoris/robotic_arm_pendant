@@ -32,12 +32,13 @@ safety-rated E-STOP. Gripper "CLOSED" means the fingers reached the closed angle
 |---|---|
 | Gazebo workcell (pedestal, table, cup, coffee machine, place pad) | `orion5_description/world/barista.world` (robot spawned at `z:=0.4`) |
 | MoveIt planning-scene objects (floor, pedestal, table, coffee_machine, place_pad) + gripper envelope | `orion5_interface/config/pendant_bridge.yaml` (`workcell:`, `gripper_envelope:`), base_link frame, `z_base = z_gazebo - 0.40` |
-| Task definitions (`barista`, 18 steps; `inspection_tour`) | `orion5_interface/config/tasks.yaml` |
+| Scenario definitions (world + workcell + objects + tasks) | `orion5_interface/config/scenarios/<scenario>.yaml` (`barista`, `conveyor`) |
+| Taught poses per scenario (pendant **Teach**) | `orion5_interface/config/scenarios/<scenario>_taught_poses.yaml` |
 | Task history (every finished cycle, CSV) | `orion5_interface/logs/task_history.csv` (launch arg `task_history`; not versioned) |
 | Cup object settings (start/place pose, attachment) | `orion5_interface/config/pendant_bridge.yaml` (`objects:`) |
-| Taught poses (written by the pendant **Teach** button) | `orion5_interface/config/taught_poses.yaml` |
+| Taught poses (written by the pendant **Teach** button) | `orion5_interface/config/scenarios/<scenario>_taught_poses.yaml` |
 | Verification helper | `rosrun orion5_interface pendant_status.py [keys…] | --watch task | --info` |
-| Candidate pose search (planning only, never writes taught poses) | `rosrun orion5_interface find_task_poses.py` → `config/pose_candidates.yaml` (inputs: `config/pose_search.yaml`) |
+| Candidate pose search (planning only, never writes taught poses) | `rosrun orion5_interface find_task_poses.py --scenario <name>` → `config/scenarios/<name>_pose_candidates.yaml` (search settings: `config/pose_search.yaml`) |
 | Safety / motion test runner (Phase D-P2) | `rosrun orion5_interface safety_tests.py` → `orion5_interface/test_reports/` (JSON + CSV) |
 
 Teach flow (no pose is hard-coded): on the pendant Jog page move the TCP with joint jog and **Cartesian jog**
@@ -71,12 +72,30 @@ with time, task, result, cycle time (wall and simulation seconds), speed, failur
 (`object_at_place`), RTF and a per-step summary. The last ten records are published in `status.task_history` and
 listed on the pendant Run page ("Son çevrimler"); the CSV is the source for measurement tables.
 
-`inspection_tour` task: visits the operator-taught points `INSPECT_1`, `INSPECT_2`, `INSPECT_3` in sequence and, at each
-one, measures the TCP against the taught pose (`verify_tcp`, default tolerance 10 mm / 3°); ends at HOME. It is the
-ready-made motion-accuracy check for a future physical robot; teach the three points with the pendant first.
-
 Pendant: the task trace shows skipped steps and step notes; a warning appears when the taught READY pose coincides with
 the HOME singularity; the Cartesian jog hint turns into a warning while the robot is at HOME.
+
+## Scenarios
+
+A scenario bundles a Gazebo world, the MoveIt planning-scene workcell, the handled objects, the task definitions and
+the operator-taught poses, so that the same bridge and pendant can validate different industrial use cases:
+
+| Scenario | Launch | World / objects | Task | Required taught poses |
+|---|---|---|---|---|
+| `barista` (default) | `roslaunch orion5_interface mery6_simulation.launch` | table, coffee machine, place pad, cup | `barista` (18 steps) | `READY`, `PRE_PICK`, `PICK`, `PRE_PLACE`, `PLACE` |
+| `conveyor` | `roslaunch orion5_interface mery6_simulation.launch scenario:=conveyor` | two static belts, product box | `conveyor_pick_place` (18 steps) | `CONV_READY`, `CONV_PRE_PICK`, `CONV_PICK`, `CONV_PRE_PLACE`, `CONV_PLACE` |
+
+Files: `config/scenarios/<scenario>.yaml` (`scenario:`, `workcell:`, `objects:`, `pose_search:`, `tasks:`),
+`orion5_description/world/<scenario>.world`, `config/scenarios/<scenario>_taught_poses.yaml`. Common bridge settings stay in
+`config/pendant_bridge.yaml`. The pendant shows the loaded scenario in the top bar and on the Run page; task history rows
+carry the scenario name.
+
+Conveyor teach flow (same rule as Barista: no pose is hard-coded): start the conveyor scenario, run
+`rosrun orion5_interface find_task_poses.py --scenario conveyor` to get planning-only candidates for `CONV_PICK`,
+`CONV_PRE_PICK`, `CONV_PLACE`, `CONV_PRE_PLACE` (the tool seeds IK from `CONV_READY` if taught, otherwise from the current
+joint state), move to each candidate with the printed bridge command, check it in Gazebo/RViz and save it with Teach;
+finally teach `CONV_READY` as a non-singular pose above the belts. In this version the belts are static: the product is
+placed at the input pick point by `SCENE_RESET` at the start of every cycle; belt motion is a later stage.
 
 Simulation limitations (also published in `/pendant/robot_info.limitations`):
 - The cup is carried by a **kinematic link attachment**, not by finger contact forces (the MC1 fingers have no

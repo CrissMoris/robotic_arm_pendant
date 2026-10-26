@@ -1,0 +1,63 @@
+# Scenario: Conveyor pick-and-place (factory-style). A product box arrives on the input belt (static in this version),
+# the robot picks it and places it on the output belt. Every cycle starts with SCENE_RESET, which puts the product
+# back at the input pick point, so the task is repeatable. Belt motion is a later, separately approved stage.
+# Start with:
+#   roslaunch orion5_interface mery6_simulation.launch scenario:=conveyor
+# Required taught poses (pendant Teach): CONV_PICK, CONV_PRE_PICK, CONV_PLACE, CONV_PRE_PLACE, CONV_READY.
+# Candidates: rosrun orion5_interface find_task_poses.py --scenario conveyor
+
+scenario:
+  name: conveyor
+  description: "Two static belts in front of the robot: pick a product box from the input belt (left) and place it on the output belt (right)"
+  world: conveyor.world       # orion5_description/world/
+  spawn_z: 0.40               # robot base height (launch arg z); z_base = z_gazebo - 0.40
+
+# Planning-scene objects (base_link). Belt bodies are full-height boxes (floor to belt top at +0.015) so the arm can
+# never plan through or under them. The product is NOT listed: it is the manipulation target.
+workcell:
+  - {name: floor,       shape: box, size: [3.0, 3.0, 0.01],    xyz: [0.0,  0.0,  -0.405]}
+  - {name: pedestal,    shape: box, size: [0.20, 0.20, 0.38],   xyz: [0.0,  0.0,  -0.21]}     # top at -0.02: 2 cm gap to base_link
+  - {name: input_belt,  shape: box, size: [0.30, 0.60, 0.415],  xyz: [0.45, -0.35, -0.1925]}  # x 0.30..0.60, y -0.65..-0.05, top +0.015
+  - {name: output_belt, shape: box, size: [0.30, 0.60, 0.415],  xyz: [0.45,  0.35, -0.1925]}  # x 0.30..0.60, y +0.05..+0.65, top +0.015
+
+# Product: 0.06 x 0.06 x 0.08 m box (centre 0.04 above the belt top). Kinematic attachment, not a physics grasp.
+objects:
+  - name: product
+    gazebo_model: product
+    gazebo_link: link
+    start_xyz_base: [0.45, -0.30, 0.055]   # on the input belt
+    start_rpy_deg: [0, 0, 0]
+    place_xyz_base: [0.45,  0.30, 0.055]   # on the output belt
+    tolerance_m: 0.03
+    attach_radius_m: 0.08
+    min_lift_m: 0.03
+
+# Inputs for scripts/find_task_poses.py --scenario conveyor (candidate poses only; the operator teaches the final ones)
+pose_search:
+  ready_pose: CONV_READY
+  targets:
+    CONV_PICK:  {xyz: [0.45, -0.30, 0.055], pre: CONV_PRE_PICK}
+    CONV_PLACE: {xyz: [0.45,  0.30, 0.055], pre: CONV_PRE_PLACE}
+
+tasks:
+  conveyor_pick_place:
+    description: "Pick the product box from the input belt and place it on the output belt (static belts, kinematic attachment)"
+    steps:
+      - {name: STATE_CHECK,     type: state_check}
+      - {name: SCENE_RESET,     type: scene_reset,   object: product}
+      - {name: READY_IF_NEEDED, type: named_if_needed, pose: CONV_READY, unless_reachable: CONV_PRE_PICK, speed: 30}
+      - {name: PRE_PICK,        type: named,         pose: CONV_PRE_PICK,  speed: 30}
+      - {name: APPROACH_PICK,   type: cartesian_to,  pose: CONV_PICK,      dxyz: [0.0, 0.0, 0.03], speed: 15}
+      - {name: GRIPPER_OPEN,    type: gripper,       action: open}
+      - {name: PICK,            type: cartesian_to,  pose: CONV_PICK,      speed: 10}
+      - {name: GRIPPER_CLOSE,   type: gripper,       action: close}
+      - {name: ATTACH_PRODUCT,  type: attach,        object: product}
+      - {name: RETRACT_PICK,    type: cartesian_to,  pose: CONV_PRE_PICK,  speed: 15}
+      - {name: VERIFY_LIFT,     type: verify_object, object: product, expect: lifted}
+      - {name: PRE_PLACE,       type: named,         pose: CONV_PRE_PLACE, speed: 30}
+      - {name: PLACE,           type: cartesian_to,  pose: CONV_PLACE,     speed: 10}
+      - {name: RELEASE,         type: gripper,       action: open}
+      - {name: DETACH_PRODUCT,  type: detach,        object: product}
+      - {name: RETRACT_PLACE,   type: cartesian_to,  pose: CONV_PRE_PLACE, speed: 15}
+      - {name: VERIFY_PLACE,    type: verify_object, object: product, expect: at_place}
+      - {name: HOME,            type: named,         pose: HOME,           speed: 30}
