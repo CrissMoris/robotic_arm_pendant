@@ -52,7 +52,7 @@ pose_search:
   conveyor:
     ready_pose: CONV_READY
     ready_xyz: [-0.05, -0.45, 0.30]      # CONV_READY candidate: tool-down above the input belt, well above the product
-    approach_dz: 0.12                    # PRE_* poses this far straight above PICK/PLACE (box hangs 0.04 below the TCP)
+    approach_dz: 0.08                    # PRE_* poses 8 cm straight above PICK/PLACE (same lift as Barista; box bottom clears the belt by 8 cm)
     targets:
       CONV_PICK:  {xyz: [-0.05, -0.58, 0.055], pre: CONV_PRE_PICK}
       CONV_PLACE: {xyz: [-0.05,  0.58, 0.055], pre: CONV_PRE_PLACE}
