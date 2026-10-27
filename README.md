@@ -119,9 +119,14 @@ Simulation limitations (also published in `/pendant/robot_info.limitations`):
   worker is still stopping, an E-STOP reset is rejected ("worker still stopping — retry"); the latched ESTOP state is
   never replaced by FAILED/STOPPED, and a reset never resumes a task. The web E-STOP is a simulation stop only.
 - Execution, arrival and gripper timeouts are measured in **simulation time** (`/clock`), so a slow Gazebo (real-time
-  factor below 1, typical in a VM) does not cause false "execution timeout" failures; a wall-clock cap (4× the timeout,
-  at least 30 s) still ends the wait if the simulation is paused. The measured RTF is published in `status.sim.rtf`
+  factor below 1, typical in a VM) does not cause false "execution timeout" failures; a wall-clock cap (4× the timeout divided
+  by the measured RTF, at least 30 s) still ends the wait if the simulation is paused. The measured RTF is published in `status.sim.rtf`
   and shown on the pendant (RTF chip; red below 0.5). Cycle times are reported both in wall and simulation seconds.
+- MoveIt/OMPL planning is sampling-based and nondeterministic: a planner-side failure (`TIMED_OUT`, `PLANNING_FAILED`)
+  is re-planned once (`plan_retries` in `pendant_bridge.yaml`), visibly: step note "planned on attempt 2", `plan.attempt`
+  in the status, `replan2` in the history step summary. Collision or invalid-goal failures are never retried. The
+  feasibility plan made by `READY_IF_NEEDED` is executed by the following `PRE_PICK` step when the arm has not moved
+  (no second plan of the same move); a task still stops at the first step that fails.
 
 ---
 

@@ -7,7 +7,9 @@ joint_tol_rad: 0.02        # completion check: |live - target| per joint (~1.1 d
 vel_tol_rad_s: 0.02        # completion check: joint must be (nearly) stopped
 settle_time: 0.2           # s, tolerance must hold this long
 default_speed_pct: 30      # MoveIt velocity/acceleration scaling (percent)
-wall_cap_factor: 4.0       # wall-clock cap = factor x (simulation-time) timeout, see README "simulation time"
+wall_cap_factor: 4.0       # wall-clock cap = factor x (simulation-time) timeout / measured RTF, see README "simulation time"
+plan_retries: 1            # re-plan a planner-side failure (OMPL TIMED_OUT / PLANNING_FAILED) at most this many times; visible in
+                           # the step note and the task history (replanN). Collision / invalid-goal failures are never retried.
 
 # MC1 gripper (degrees on the left finger joints, right joints are mirrored by the service).
 # Close direction verified in Gazebo (Phase B). "CLOSED" means the fingers reached this angle; the object itself is

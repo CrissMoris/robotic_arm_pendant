@@ -99,6 +99,9 @@ GOAL_STATUS_NAMES = {v: k for k, v in GoalStatus.__dict__.items()
                      if isinstance(v, int) and k.isupper()}
 MOVEIT_ERROR_NAMES = {v: k for k, v in MoveItErrorCodes.__dict__.items()
                       if isinstance(v, int) and k.isupper()}
+# Planner-side, nondeterministic failures that plan_and_execute may re-plan (bounded by ~plan_retries, visible in the
+# step note / plan.attempt). Collision, invalid-goal and limit results are deterministic and are never retried.
+PLAN_RETRY_CODES = ("TIMED_OUT", "PLANNING_FAILED")
 
 
 def deg2rad(v):
@@ -202,11 +205,18 @@ class PendantBridge(object):
         self.gripper_link_candidates = list(rospy.get_param("~gripper_link_candidates", ["gripper_base", "eef_link", "link_6"]))
         # Execution clock: controllers run on simulation time (/clock). All execution / arrival / gripper timeouts are
         # measured in that clock so a slow Gazebo (real-time factor < 1, typical in a VM) does not cause false timeouts.
-        # A wall-clock cap (wall_cap_factor x sim timeout, at least 30 s) still ends the wait if the simulation is paused.
+        # A wall-clock cap (wall_cap_factor x sim timeout / measured RTF, at least 30 s) still ends the wait if the
+        # simulation is paused; see _wall_cap().
         self.use_sim_time = bool(rospy.get_param("/use_sim_time", False))
         self.wall_cap_factor = float(rospy.get_param("~wall_cap_factor", 4.0))
         self.rtf = None                      # measured real-time factor (sim seconds per wall second), None until sampled
         self._rtf_sample = None
+        # Planning: OMPL is sampling-based and nondeterministic; a planner-side failure (TIMED_OUT / PLANNING_FAILED) is
+        # re-planned at most plan_retries times, visibly (plan.attempt, step note, log). Collision / invalid-goal results
+        # are never retried. A feasibility plan made by named_if_needed can be executed by the next task step (prepared_plan)
+        # instead of planning the same move twice.
+        self.plan_retries = max(0, int(rospy.get_param("~plan_retries", 1)))
+        self.prepared_plan = None
         # Task history: every finished cycle is appended to a CSV (operator record / measurement source) and the last
         # entries are published in the status (task_history).
         self.history_file = rospy.get_param("~task_history_file", "")
@@ -317,7 +327,7 @@ class PendantBridge(object):
     @staticmethod
     def _empty_plan(cmd_id):
         return {"cmd_id": cmd_id, "attempted": False, "ok": None, "planner": None, "time_s": None,
-                "traj_duration_s": None, "points": None, "fraction": None, "error_code": None}
+                "traj_duration_s": None, "points": None, "fraction": None, "error_code": None, "attempt": None}
 
     @staticmethod
     def _empty_exec(cmd_id):
@@ -657,19 +667,69 @@ class PendantBridge(object):
         return bool(ok) and len(pts) > 0, traj
 
     def plan_and_execute(self, prepare, planner_label):
-        """prepare(): sets the MoveIt target. Plans, executes, verifies."""
+        """prepare(): sets the MoveIt target. Plans (bounded, visible re-plan on planner-side failures), executes, verifies."""
         self.set_state(STATE_PLANNING)
         self.check_stop()
-        try:
-            prepare()
-        except Exception as exc:
-            self.set_state(STATE_FAILED, "target rejected: %s" % exc)
-            return False
-        ok, traj = self._moveit_plan(planner_label)
-        if not ok:
-            self.set_state(STATE_FAILED, "planning failed (%s)" % self.plan_info["error_code"])
-            return False
+        attempt, failed_codes = 0, []
+        while True:
+            attempt += 1
+            try:
+                prepare()
+            except Exception as exc:
+                self.set_state(STATE_FAILED, "target rejected: %s" % exc)
+                return False
+            ok, traj = self._moveit_plan(planner_label)
+            with self.lock:
+                self.plan_info["attempt"] = attempt
+                code = self.plan_info.get("error_code")
+            if ok:
+                if attempt > 1:
+                    note = "planned on attempt %d (earlier: %s)" % (attempt, ", ".join(failed_codes))
+                    self.step_note = (self.step_note + "; " + note) if self.step_note else note
+                    rospy.loginfo("pendant_bridge: %s — %s", planner_label, note)
+                break
+            failed_codes.append(str(code))
+            if attempt > self.plan_retries or code not in PLAN_RETRY_CODES:
+                self.set_state(STATE_FAILED, "planning failed (%s)" % (
+                    code if attempt == 1 else "%s after %d attempts" % (" / ".join(failed_codes), attempt)))
+                return False
+            rospy.logwarn("pendant_bridge: planning %s failed (%s) — re-planning, attempt %d of %d",
+                          planner_label, code, attempt + 1, self.plan_retries + 1)
+            self.check_stop()
         return self.execute_trajectory(traj.joint_trajectory)
+
+    def _prepared_plan_usable(self, prepared, pose):
+        """True when the feasibility plan of the previous task step can be executed for `pose`: same target pose and
+        goal joints, same speed, and the arm has not moved since that plan was made."""
+        if not prepared or str(pose).upper() != prepared.get("pose"):
+            return False
+        traj = prepared.get("traj")
+        if traj is None or not traj.joint_trajectory.points or prepared.get("start_rad") is None:
+            return False
+        if abs(float(prepared.get("speed_pct", -1)) - float(self.speed_pct)) > 1e-6:
+            return False
+        if self._resolved_joints_deg(pose) != prepared.get("goal_deg"):
+            return False
+        cur = self.js.positions(ARM_JOINTS)
+        if cur is None or max(abs(c - s) for c, s in zip(cur, prepared["start_rad"])) >= self.joint_tol:
+            return False
+        return True
+
+    def execute_prepared(self, prepared, pose):
+        """Execute the collision-checked trajectory that named_if_needed already planned to `pose` (no second plan)."""
+        label = str(pose).upper()
+        with self.lock:
+            self.plan_info["planner"] = "ompl/reused:" + label
+        note = "executed the plan validated by the previous step (no re-plan)"
+        self.step_note = (self.step_note + "; " + note) if self.step_note else note
+        rospy.loginfo("pendant_bridge: %s — %s", label, note)
+        return self.execute_trajectory(prepared["traj"].joint_trajectory)
+
+    def _wall_cap(self, timeout, floor):
+        """Wall-clock cap for a simulation-time timeout: wall_cap_factor x timeout, divided by the measured real-time
+        factor (RTF < 1, e.g. a slow VM, gets proportionally more wall time; RTF >= 1 is not scaled), at least `floor`."""
+        rtf = self.rtf if isinstance(self.rtf, (int, float)) and self.rtf > 0 else 1.0
+        return max(floor, self.wall_cap_factor * timeout / min(1.0, max(0.05, rtf)))
 
     def execute_trajectory(self, jt):
         """Send a JointTrajectory to the arm controller via FollowJointTrajectory and verify arrival."""
@@ -693,7 +753,7 @@ class PendantBridge(object):
         self.fjt.send_goal(goal)
         t0 = self._now()                      # execution clock (sim time under Gazebo)
         w0 = time.time()
-        wall_cap = max(30.0, self.wall_cap_factor * timeout)
+        wall_cap = self._wall_cap(timeout, 30.0)
         status = None
         while not rospy.is_shutdown():
             if self.stop_evt.is_set():
@@ -743,7 +803,7 @@ class PendantBridge(object):
         goal = [target[n] for n in names]
         t0 = self._now()                      # execution clock (sim time under Gazebo)
         w0 = time.time()
-        wall_cap = max(10.0, self.wall_cap_factor * timeout)
+        wall_cap = self._wall_cap(timeout, 10.0)
         settled_since = None
         max_err = float("inf")
         while not rospy.is_shutdown():
@@ -872,6 +932,7 @@ class PendantBridge(object):
                 self.set_result(cmd, "rejected", "simulation E-STOP active")
                 continue
             self.stop_evt.clear()
+            self.prepared_plan = None            # a feasibility plan never outlives the command that made it
             with self.lock:                      # per-command tracking: fresh plan/exec snapshots tagged with this cmd id
                 self.plan_info = self._empty_plan(cmd.get("id"))
                 self.exec_info = self._empty_exec(cmd.get("id"))
@@ -1121,6 +1182,7 @@ class PendantBridge(object):
                     if step.get("type") in ("named", "named_if_needed", "joint", "pose", "cartesian_to", "cartesian_offset") \
                             and self.plan_info.get("attempted"):
                         self.task["steps"][i]["plan_s"] = self.plan_info.get("time_s")
+                        self.task["steps"][i]["plan_attempts"] = self.plan_info.get("attempt") or 1
                 if not ok:
                     break      # failed step: the task stops here; no automatic recovery/HOME motion
             with self.lock:
@@ -1169,7 +1231,9 @@ class PendantBridge(object):
                 "failure_step": ("%d:%s" % (failed[0][0] + 1, failed[0][1].get("name"))) if failed else None,
                 "message": t.get("message") or "", "object_at_place": cup.get("at_place"),
                 "object_attached": cup.get("attached"), "rtf": self.rtf,
-                "steps": "|".join("%s:%s:%s" % (s.get("name"), s.get("state"), s.get("t_s")) for s in t["steps"])}
+                "steps": "|".join("%s:%s:%s%s" % (s.get("name"), s.get("state"), s.get("t_s"),
+                                                  ":replan%d" % s["plan_attempts"] if (s.get("plan_attempts") or 1) > 1 else "")
+                                  for s in t["steps"])}
 
     def _append_history(self, row):
         """Append one record to the task history CSV (header written when the file is created)."""
@@ -1192,6 +1256,7 @@ class PendantBridge(object):
         t = step.get("type")
         if "speed" in step:
             self.speed_pct = float(max(1, min(100, step["speed"])))
+        prepared, self.prepared_plan = self.prepared_plan, None     # valid for exactly one following step
         if t == "state_check":
             return self.state_check(step)
         if t == "named_if_needed":
@@ -1207,7 +1272,10 @@ class PendantBridge(object):
         if t == "verify_object":
             return self.verify_object(step.get("object", "cup"), step.get("expect", "at_place"), step.get("tol_m"))
         if t == "named":
-            return self.move_named(step.get("pose", step.get("name_pose", "")))
+            pose = step.get("pose", step.get("name_pose", ""))
+            if self._prepared_plan_usable(prepared, pose):
+                return self.execute_prepared(prepared, pose)
+            return self.move_named(pose)
         if t == "joint":
             return self.move_joints_deg(step["joints_deg"])
         if t == "pose":
@@ -1293,6 +1361,9 @@ class PendantBridge(object):
                     self.step_outcome = "skipped"
                     self.step_note = "%s skipped: direct collision-checked plan to %s ok (%.2f s)" % (
                         label, str(nxt).upper(), self.plan_info.get("time_s") or 0.0)
+                    # keep the validated trajectory: the next step may execute it instead of planning the same move again
+                    self.prepared_plan = {"pose": str(nxt).upper(), "traj": _traj, "goal_deg": list(next_deg),
+                                          "start_rad": list(cur) if cur is not None else None, "speed_pct": self.speed_pct}
                     self.set_state(STATE_IDLE)
                     rospy.loginfo("pendant_bridge: %s", self.step_note)
                     return True
