@@ -9,23 +9,21 @@
         -> Gazebo (physics, orion_arm_pos_joint_traj_controller + mc1_traj_controller)
       RViz: planning scene, targets, planned trajectories, collision visualisation.
 
-    Scenarios (world + planning-scene workcell + objects + tasks + taught poses):
-      roslaunch orion5_interface mery6_simulation.launch scenario:=barista     (default)
-      roslaunch orion5_interface mery6_simulation.launch scenario:=conveyor
-    A scenario is config/scenarios/<scenario>.yaml plus orion5_description/world/<scenario>.world; its operator-taught
-    poses are stored in config/scenarios/<scenario>_taught_poses.yaml (written by the pendant Teach button).
+    One workcell for all tasks: orion5_description/world/mery6_workcell.world (Barista table + two conveyor belts),
+    config/workcell.yaml (planning scene, objects, pose search), config/tasks.yaml (barista, conveyor_pick_place, ...),
+    config/taught_poses.yaml (operator-taught / tool-selected poses). The pendant lists every task of tasks.yaml.
   -->
 
-  <arg name="scenario"       default="barista" doc="Scenario name: config/scenarios/NAME.yaml + orion5_description/world/NAME.world"/>
-  <arg name="world"          default="$(find orion5_description)/world/$(arg scenario).world" doc="Gazebo world file"/>
-  <arg name="z"              default="0.4"  doc="Spawn height of the robot base (all scenarios use a 0.4 m pedestal)"/>
+  <arg name="world"          default="$(find orion5_description)/world/mery6_workcell.world" doc="Gazebo world file"/>
+  <arg name="z"              default="0.4"  doc="Spawn height of the robot base (0.4 m pedestal)"/>
   <arg name="gazebo_gui"     default="true"/>
   <arg name="rviz"           default="true"/>
   <arg name="rosbridge_port" default="9090"/>
   <arg name="pendant_bridge" default="true" doc="Start the pendant bridge node (MoveIt executor)"/>
   <arg name="bridge_config"  default="$(find orion5_interface)/config/pendant_bridge.yaml" doc="Common bridge settings"/>
-  <arg name="scenario_config" default="$(find orion5_interface)/config/scenarios/$(arg scenario).yaml" doc="Scenario: workcell, objects, tasks"/>
-  <arg name="taught_poses"   default="$(find orion5_interface)/config/scenarios/$(arg scenario)_taught_poses.yaml" doc="Written by the Teach function"/>
+  <arg name="workcell_config" default="$(find orion5_interface)/config/workcell.yaml" doc="Planning scene, objects, pose search"/>
+  <arg name="task_config"    default="$(find orion5_interface)/config/tasks.yaml" doc="Task definitions"/>
+  <arg name="taught_poses"   default="$(find orion5_interface)/config/taught_poses.yaml" doc="Written by Teach / find_task_poses.py"/>
   <arg name="task_history"   default="$(find orion5_interface)/logs/task_history.csv" doc="Every finished task cycle is appended here (CSV)"/>
 
   <!-- 1. Gazebo + robot (arm + MC1) + ros_control controllers + gripper service + robot_state_publisher -->
@@ -54,12 +52,13 @@
   </include>
 
   <!-- 5. Pendant bridge: JSON commands/status over /pendant/cmd and /pendant/status, MoveIt execution,
-          completion checks, gripper verification, workcell planning-scene objects, object handling, taught poses,
-          tasks, task history, simulation E-STOP. Common settings first, then the scenario (workcell/objects/tasks). -->
+          completion checks, gripper verification, planning-scene objects, object handling, taught poses, tasks,
+          task history, simulation E-STOP. -->
   <node name="pendant_bridge" pkg="orion5_interface" type="pendant_bridge.py" output="screen"
         if="$(arg pendant_bridge)">
     <rosparam file="$(arg bridge_config)"   command="load"/>
-    <rosparam file="$(arg scenario_config)" command="load"/>
+    <rosparam file="$(arg workcell_config)" command="load"/>
+    <rosparam file="$(arg task_config)"     command="load"/>
     <param name="taught_poses_file" value="$(arg taught_poses)"/>
     <param name="task_history_file" value="$(arg task_history)"/>
   </node>

@@ -5,14 +5,16 @@ find_task_poses.py — MoveIt-based candidate search for the Barista poses
 PICK / PRE_PICK / PLACE / PRE_PLACE (SIMULATION HELPER, planning only).
 
 What it does
-  * reads the workcell (cup, place_pad) from barista.world and the taught READY pose from taught_poses.yaml
+  * reads the targets of the group (config/workcell.yaml pose_search.<group>; the Barista group may also derive them
+    from the cup / place_pad models of the world file) and the group's reference pose from taught_poses.yaml
   * builds tool-down TCP targets at the cup (mid-height grasp) and above the place pad, rotated about base Z
   * for every candidate: MoveIt IK (seeded with READY, collision-aware, inside URDF joint limits),
     /check_state_validity against the current planning scene (workcell objects + gripper envelope),
     the PRE_* pose straight above it, the straight-line PRE -> target path (compute_cartesian_path fraction and
     joint-jump guard, the same criterion the task runner uses), an optional OMPL plan READY -> PRE_*,
     the joint distance from READY and whether the elbow/wrist branch matches READY
-  * prints a ranked report and writes config/scenarios/<scenario>_pose_candidates.yaml (NEVER the taught poses file)
+  * prints a ranked report and writes config/pose_candidates_<group>.yaml; with --write-taught the best feasible
+    candidates are written into config/taught_poses.yaml and the running bridge reloads them
 
 What it does NOT do
   * it never moves the robot and never writes taught_poses.yaml. The operator drives the robot to a chosen
@@ -20,8 +22,8 @@ What it does NOT do
     Teach. The cup stays unattached (no grasp simulation).
 
 Run while mery6_simulation.launch is up (move_group + pendant_bridge, so the planning scene is loaded):
-  rosrun orion5_interface find_task_poses.py [--config pose_search.yaml] [--taught taught_poses.yaml]
-                                             [--out pose_candidates.yaml] [--no-write] [--top 3]
+  rosrun orion5_interface find_task_poses.py --group conveyor --write-taught      # select + write CONV_* poses
+  rosrun orion5_interface find_task_poses.py --group barista [--top 3]            # candidates only (report)
 """
 
 import argparse
@@ -286,20 +288,22 @@ def fmt_j(j):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--scenario", default="barista",
-                    help="scenario name: reads pose_search/objects/world from config/scenarios/<name>.yaml")
+    ap.add_argument("--group", default="barista",
+                    help="pose-search group in config/workcell.yaml (pose_search.<group>): barista | conveyor | ...")
+    ap.add_argument("--workcell", default=os.path.join(pkg_path("orion5_interface"), "config", "workcell.yaml"),
+                    help="workcell file (cell/world, objects, pose_search groups)")
     ap.add_argument("--config", default=os.path.join(pkg_path("orion5_interface"), "config", "pose_search.yaml"),
                     help="search parameters (yaw candidates, approach height, IK settings)")
-    ap.add_argument("--taught", default=None, help="taught poses file (default: config/scenarios/<scenario>_taught_poses.yaml)")
-    ap.add_argument("--out", default=None, help="candidates file (default: config/scenarios/<scenario>_pose_candidates.yaml)")
-    ap.add_argument("--ready-name", default=None, help="name of the taught reference pose (default: scenario pose_search.ready_pose or READY)")
+    ap.add_argument("--taught", default=None, help="taught poses file (default: config/taught_poses.yaml)")
+    ap.add_argument("--out", default=None, help="candidates file (default: config/pose_candidates_<group>.yaml)")
+    ap.add_argument("--ready-name", default=None, help="name of the taught reference pose (default: group's ready_pose or READY)")
     ap.add_argument("--no-write", action="store_true", help="only print, do not write the candidates file")
     ap.add_argument("--top", type=int, default=3, help="candidates to print per pose")
     ap.add_argument("--ready-joints-deg", type=float, nargs=6, metavar="DEG",
                     help="use these joints as the reference instead of the taught pose (e.g. a validated candidate)")
     ap.add_argument("--write-taught", action="store_true",
-                    help="select the best feasible candidate per pose (and a READY above the workcell from the scenario's "
-                         "pose_search.ready_xyz) and write them into the scenario's taught poses file, then ask the "
+                    help="select the best feasible candidate per pose (and a READY above the workcell from the group's "
+                         "pose_search.ready_xyz) and write them into config/taught_poses.yaml, then ask the "
                          "running bridge to reload them. Candidates are validated with MoveIt (IK, collision, straight "
                          "approach path, OMPL plan); the first task run in Gazebo is the measured validation.")
     ap.add_argument("--force", action="store_true", help="with --write-taught: overwrite poses that already exist in the file")
@@ -309,14 +313,17 @@ def main():
     rospy.init_node("find_task_poses", anonymous=True)
 
     cfg = load_yaml(args.config)
-    sc_dir = os.path.join(pkg_path("orion5_interface"), "config", "scenarios")
-    sc_path = os.path.join(sc_dir, args.scenario + ".yaml")
-    sc = load_yaml(sc_path) if os.path.isfile(sc_path) else {}
-    ps = sc.get("pose_search") or {}
+    cfg_dir = os.path.join(pkg_path("orion5_interface"), "config")
+    sc = load_yaml(args.workcell) if os.path.isfile(args.workcell) else {}
+    groups = sc.get("pose_search") or {}
+    ps = groups.get(args.group) or {}
+    if not ps:
+        print("WARNING: no pose_search group '%s' in %s (available: %s) — using pose_search.yaml targets only" % (
+            args.group, args.workcell, ", ".join(groups.keys()) or "none"))
     ready_name = str(args.ready_name or ps.get("ready_pose") or "READY").upper()
-    taught_path = args.taught or os.path.join(sc_dir, args.scenario + "_taught_poses.yaml")
-    out_path = args.out or os.path.join(sc_dir, args.scenario + "_pose_candidates.yaml")
-    print("Scenario: %s (%s)" % (args.scenario, sc_path if sc else "no scenario file found — using pose_search.yaml targets only"))
+    taught_path = args.taught or os.path.join(cfg_dir, "taught_poses.yaml")
+    out_path = args.out or os.path.join(cfg_dir, "pose_candidates_%s.yaml" % args.group)
+    print("Workcell: %s, group: %s" % ((sc.get("cell") or {}).get("name", "?"), args.group))
 
     # --- reference pose (seed for IK, branch consistency) ---------------------
     ready_tcp_q = None
@@ -338,9 +345,9 @@ def main():
                       ready_name, taught_path, fmt_j(ready_deg), ready_name))
 
     # --- workcell targets ---------------------------------------------------
-    world_name = (sc.get("scenario") or {}).get("world") or cfg.get("world_file") or "barista.world"
+    world_name = (sc.get("cell") or {}).get("world") or cfg.get("world_file") or "mery6_workcell.world"
     world = world_name if os.path.isabs(world_name) else os.path.join(pkg_path("orion5_description"), "world", world_name)
-    z_off = float((sc.get("scenario") or {}).get("spawn_z", cfg.get("gazebo_z_offset", 0.40)))
+    z_off = float((sc.get("cell") or {}).get("spawn_z", cfg.get("gazebo_z_offset", 0.40)))
     wc = read_workcell(world, z_off) if os.path.isfile(world) else {}
     targets = dict(ps.get("targets") or cfg.get("targets") or {})
     if "PICK" not in targets and "cup" in wc:
@@ -361,7 +368,7 @@ def main():
     print("Targets (base_link): %s" % targets)
 
     for k in ("approach_dz", "yaw_candidates_deg", "xy_offsets_m", "grasp_height_fraction"):
-        if k in ps:                               # scenario-level overrides of the search settings
+        if k in ps:                               # group-level overrides of the search settings
             cfg[k] = ps[k]
     finder = PoseFinder(cfg, ready_deg)
     # --- automatic READY above the workcell (only with --write-taught and when the reference pose is not taught) ---

@@ -3,7 +3,7 @@
 # (cup and place_pad models) and converted with z_base = z_gazebo - gazebo_z_offset; the values under
 # `targets` are only used when a target is listed there explicitly (override).
 
-world_file: ""                 # empty = $(rospack find orion5_description)/world/barista.world
+world_file: ""                 # empty = world from config/workcell.yaml (cell.world)
 gazebo_z_offset: 0.40          # robot spawned at z:=0.4 (pedestal height)
 
 # Grasp geometry

@@ -236,7 +236,7 @@ table.mon td.err{color:var(--amber);}
         <div class="chip">BRIDGE<b id="chip-bridge">—</b></div>
         <div class="chip">SPEED<b id="chip-speed">30%</b></div>
         <div class="chip" title="Gazebo gerçek zaman çarpanı (sim s / gerçek s)">RTF<b id="chip-rtf">—</b></div>
-        <div class="chip" title="Yüklü senaryo (dünya + workcell + görevler)">SENARYO<b id="chip-scenario">—</b></div>
+        <div class="chip" title="Yüklü çalışma hücresi (dünya + düzenekler + görevler)">ORTAM<b id="chip-scenario">—</b></div>
       </div>
     </div>
     <div class="topbar-right">
@@ -393,7 +393,7 @@ table.mon td.err{color:var(--amber);}
           <div class="vp-label" id="run-status-label">Stopped</div>
         </div>
         <div class="kv" style="margin-top:12px;">
-          <div class="k">Senaryo</div><div class="v" id="run-scenario">—</div>
+          <div class="k">Ortam</div><div class="v" id="run-scenario">—</div>
           <div class="k">Görev</div><div class="v" id="run-task-name">—</div>
           <div class="k">Adım</div><div class="v" id="run-step">—</div>
           <div class="k">Durum</div><div class="v" id="run-state">—</div>
@@ -725,10 +725,10 @@ function onRobotInfo(info){
   document.getElementById('ready-warn').style.display = readySingular ? 'block' : 'none';
   if(readySingular && !onRobotInfo._readyWarned){ onRobotInfo._readyWarned=true; appendLog('Uyarı: READY, HOME tekil duruşuyla aynı öğretilmiş; masa üstünde yeni bir READY öğretilmesi önerilir.','warn'); }
   document.getElementById('hist-file').textContent = info.task_history_file ? '· '+info.task_history_file : '';
-  const scn=info.scenario||{};
+  const scn=info.cell||{};
   document.getElementById('chip-scenario').textContent = scn.name||'—';
   document.getElementById('run-scenario').textContent = scn.name ? scn.name+(scn.description?' — '+scn.description:'') : '—';
-  if(first && scn.name) appendLog('Senaryo: '+scn.name+(scn.world?' ('+scn.world+')':''),'sys');
+  if(first && scn.name) appendLog('Ortam: '+scn.name+(scn.world?' ('+scn.world+')':'')+' · görevler: '+names.join(', '),'sys');
   if(first){
     appendLog('Planlama sahnesi: '+((info.workcell_loaded||[]).join(', ')||'boş'),'sys');
     if(info.estop_is_simulation_only) appendLog('Not: E-STOP yalnızca simülasyon durdurmasıdır (güvenlik sınıfı değildir).','warn');
@@ -825,7 +825,9 @@ function onBridgeStatus(st){
   document.getElementById('run-count').textContent = t.count!=null ? t.count : '—';
   const hist=st.task_history||[];
   document.getElementById('hist-rows').innerHTML = hist.length ? hist.slice().reverse().map(h=>`<tr><td>${escapeHtml((h.time||'').slice(11))}</td><td>${escapeHtml(h.task||'')}</td><td style="color:${h.result==='ok'?'var(--green)':'var(--red)'}">${escapeHtml(h.result||'')}</td><td>${h.cycle_time_s!=null?h.cycle_time_s:'—'} / ${h.cycle_time_sim_s!=null?h.cycle_time_sim_s:'—'}</td><td>${escapeHtml(h.failure_step||'—')}</td><td>${h.object_at_place===true?'hedefte':(h.object_at_place===false?'hedefte değil':'—')}</td></tr>`).join('') : '<tr><td colspan="6" class="note">—</td></tr>';
-  const objName=Object.keys(st.object||{})[0]; const ob=objName?st.object[objName]:null;
+  const to=(robotInfo&&robotInfo.task_objects)||{};
+  const objName=(selectedTask && to[selectedTask] && st.object && st.object[to[selectedTask]]) ? to[selectedTask] : Object.keys(st.object||{})[0];
+  const ob=objName?st.object[objName]:null;
   document.getElementById('run-object').textContent = ob ? (objName+': '+(ob.attached?'gripper\'a bağlı':'serbest')+(ob.at_start?' · başlangıçta':'')+(ob.at_place?' · hedefte':'')+(ob.pose_base?' · ('+ob.pose_base.map(v=>v.toFixed(2)).join(', ')+')':'')+(ob.attacher_available?'':' · attacher YOK')) : '—';
   document.getElementById('run-status-label').textContent = t.running ? 'Running' : 'Stopped';
   if(t.steps && t.steps.length && (t.name===selectedTask || t.running)) buildTraceList(t.steps);
@@ -873,7 +875,10 @@ function pendantCmd(obj, quiet){
   if(!quiet) appendLog('→ bridge: '+JSON.stringify(obj),'info');
   return obj.id;
 }
-function firstObjectName(){ const o=(bridgeStatus&&bridgeStatus.object)||{}; const k=Object.keys(o)[0]; if(!k) appendLog('Bu senaryoda taşınan nesne tanımlı değil','warn'); return k||'cup'; }
+function firstObjectName(){
+  // the handled object of the SELECTED task (robot_info.task_objects); fallback: first object of the status
+  const to=(robotInfo&&robotInfo.task_objects)||{}; if(selectedTask && to[selectedTask]) return to[selectedTask];
+  const o=(bridgeStatus&&bridgeStatus.object)||{}; const k=Object.keys(o)[0]; if(!k) appendLog('Seçili görev için taşınan nesne tanımlı değil','warn'); return k||'cup'; }
 function bridgeBusy(){
   return bridgeStatus && (bridgeStatus.state==='PLANNING' || bridgeStatus.state==='EXECUTING' || (bridgeStatus.task && bridgeStatus.task.running));
 }

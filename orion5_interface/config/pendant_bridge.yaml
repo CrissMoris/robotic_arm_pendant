@@ -1,6 +1,6 @@
-# pendant_bridge.py common parameters (loaded into the node's private namespace). Scenario-specific parts
-# (world, workcell, objects, tasks, pose search targets) live in config/scenarios/<scenario>.yaml and are loaded by
-# mery6_simulation.launch after this file. Simulation only. No PID gains, no hardware settings here.
+# pendant_bridge.py common parameters (loaded into the node's private namespace). The workcell (cell/world, planning
+# scene, handled objects, pose search groups) is config/workcell.yaml and the tasks are config/tasks.yaml; both are
+# loaded by mery6_simulation.launch after this file. Simulation only. No PID gains, no hardware settings here.
 
 status_rate: 10.0          # Hz, /pendant/status
 joint_tol_rad: 0.02        # completion check: |live - target| per joint (~1.1 deg)
@@ -11,7 +11,7 @@ wall_cap_factor: 4.0       # wall-clock cap = factor x (simulation-time) timeout
 
 # MC1 gripper (degrees on the left finger joints, right joints are mirrored by the service).
 # Close direction verified in Gazebo (Phase B). "CLOSED" means the fingers reached this angle; the object itself is
-# carried by a kinematic link attachment (see objects: in the scenario file), not by finger contact forces.
+# carried by a kinematic link attachment (see objects: in config/workcell.yaml), not by finger contact forces.
 gripper_open_deg: 0.0
 gripper_close_deg: 35.0
 gripper_time: 1.0
@@ -24,8 +24,8 @@ cartesian_min_fraction: 0.95          # jog only; task cartesian_to steps requir
 cartesian_max_joint_jump_rad: 0.35
 
 # Named joint poses in degrees. HOME = all zero (same as SRDF 'home', verified in Phase A).
-# Every other pose is TAUGHT by the operator in Gazebo with the pendant "Teach" button and stored in the scenario's
-# taught poses file (config/scenarios/<scenario>_taught_poses.yaml, set by the launch file).
+# Every other pose is TAUGHT by the operator in Gazebo with the pendant "Teach" button and stored in
+# config/taught_poses.yaml (set by the launch file); find_task_poses.py --write-taught may add tool-selected poses.
 named_poses:
   HOME: [0, 0, 0, 0, 0, 0]
 
@@ -37,7 +37,7 @@ gripper_envelope:
   size: [0.07, 0.07, 0.17]
   z_offset: 0.085
 
-# Gazebo robot model / frame rule shared by all scenarios (robot spawned at z:=0.4 on a 0.4 m pedestal).
+# Gazebo robot model / frame rule shared by all tasks (robot spawned at z:=0.4 on a 0.4 m pedestal).
 robot_model: orion5_v166               # Gazebo model name of the robot (spawn_model -model)
 gazebo_z_offset: 0.40
 gripper_link_candidates: [gripper_base, eef_link, link_6]   # Gazebo lumps fixed-joint links; first one present is used

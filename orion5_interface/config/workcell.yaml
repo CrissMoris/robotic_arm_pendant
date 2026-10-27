@@ -1,0 +1,58 @@
+# Single workcell for all tasks (loaded by mery6_simulation.launch after pendant_bridge.yaml).
+# One Gazebo world (orion5_description/world/mery6_workcell.world) holds the fixtures of every task:
+#   - Barista: table in front of the robot with coffee machine, place pad and cup   (task: barista)
+#   - Conveyor: input belt on the robot's left, output belt on its right, product box (task: conveyor_pick_place)
+# Frame rule: z_gazebo = z_base + 0.40 (robot spawned at z:=0.4 on the pedestal). All values below are base_link.
+
+cell:
+  name: mery6_workcell
+  description: "Barista table (front) + two static conveyor belts (left/right); tasks: barista, conveyor_pick_place"
+  world: mery6_workcell.world
+
+# Planning-scene collision objects (fixtures only; the handled objects below are the targets and are NOT listed).
+workcell:
+  - {name: floor,          shape: box, size: [3.0, 3.0, 0.01],    xyz: [0.0,   0.0,  -0.405]}
+  - {name: pedestal,       shape: box, size: [0.20, 0.20, 0.38],   xyz: [0.0,   0.0,  -0.21]}     # top at -0.02: 2 cm gap to base_link
+  # Barista (unchanged)
+  - {name: table,          shape: box, size: [0.60, 0.80, 0.03],   xyz: [0.55,  0.0,   0.0]}      # top surface at +0.015
+  - {name: coffee_machine, shape: box, size: [0.20, 0.30, 0.40],   xyz: [0.75,  0.0,   0.215]}
+  - {name: place_pad,      shape: box, size: [0.15, 0.15, 0.01],   xyz: [0.42,  0.15,  0.02]}
+  # Conveyor belts: full-height boxes (floor to belt top +0.015), x -0.35..0.25, y -0.73..-0.43 / +0.43..+0.73
+  - {name: input_belt,     shape: box, size: [0.60, 0.30, 0.415],  xyz: [-0.05, -0.58, -0.1925]}
+  - {name: output_belt,    shape: box, size: [0.60, 0.30, 0.415],  xyz: [-0.05,  0.58, -0.1925]}
+
+# Handled objects (scene_reset / attach / detach / verify_object). Kinematic attachment via gazebo_ros_link_attacher.
+objects:
+  - name: cup                              # Barista
+    gazebo_model: cup
+    gazebo_link: link
+    start_xyz_base: [0.42, -0.15, 0.065]
+    start_rpy_deg: [0, 0, 0]
+    place_xyz_base: [0.42, 0.15, 0.075]
+    tolerance_m: 0.03
+    attach_radius_m: 0.08
+    min_lift_m: 0.03
+  - name: product                          # Conveyor: 0.06 x 0.06 x 0.08 m box, centre 0.04 above the belt top
+    gazebo_model: product
+    gazebo_link: link
+    start_xyz_base: [-0.05, -0.58, 0.055]  # on the input belt
+    start_rpy_deg: [0, 0, 0]
+    place_xyz_base: [-0.05,  0.58, 0.055]  # on the output belt
+    tolerance_m: 0.03
+    attach_radius_m: 0.08
+    min_lift_m: 0.03
+
+# Inputs for scripts/find_task_poses.py --group <group> [--write-taught]  (candidate poses; the operator may re-teach)
+pose_search:
+  barista:
+    ready_pose: READY
+    targets:
+      PICK:  {xyz: [0.42, -0.15, 0.065], pre: PRE_PICK}
+      PLACE: {xyz: [0.42,  0.15, 0.075], pre: PRE_PLACE}
+  conveyor:
+    ready_pose: CONV_READY
+    ready_xyz: [-0.05, -0.45, 0.30]      # CONV_READY candidate: tool-down above the input belt, well above the product
+    approach_dz: 0.12                    # PRE_* poses this far straight above PICK/PLACE (box hangs 0.04 below the TCP)
+    targets:
+      CONV_PICK:  {xyz: [-0.05, -0.58, 0.055], pre: CONV_PRE_PICK}
+      CONV_PLACE: {xyz: [-0.05,  0.58, 0.055], pre: CONV_PRE_PLACE}

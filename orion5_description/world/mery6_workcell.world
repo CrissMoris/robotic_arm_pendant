@@ -1,0 +1,222 @@
+<?xml version="1.0" ?>
+<!--
+  Mery6 single workcell (simulation only): Barista fixtures in front of the robot + two static conveyor belts beside it.
+  Every task of config/tasks.yaml runs in this world; planning-scene copies of the fixtures are in config/workcell.yaml.
+
+  Robot: orion5_v166 + MC1, spawned with  -z 0.4  (base_link on top of the pedestal). Gazebo z = base_link z + 0.40.
+
+  Object          size (x y z)        Gazebo pose (x y z)      base_link z / notes
+  pedestal        0.20 0.20 0.40      0.00  0.00 0.20         top at 0.00
+  table top       0.60 0.80 0.03      0.55  0.00 0.40         top surface +0.015 (Barista, unchanged)
+  cup (cylinder)  r 0.035 h 0.10      0.42 -0.15 0.465        centre 0.065 (dynamic, Barista target)
+  coffee_machine  0.20 0.30 0.40      0.75  0.00 0.615        obstacle
+  place_pad       0.15 0.15 0.01      0.42  0.15 0.42         top 0.025
+  input_belt      0.60 0.30 0.05     -0.05 -0.58 0.39         belt top 0.415 -> +0.015 (left of the robot)
+  output_belt     0.60 0.30 0.05     -0.05  0.58 0.39         belt top 0.415 -> +0.015 (right of the robot)
+  product (box)   0.06 0.06 0.08     -0.05 -0.58 0.455        centre 0.055 (dynamic, conveyor target)
+
+  Objects are carried by the gazebo_ros_link_attacher plugin (kinematic fixed joint, not a physics grasp); each task's
+  SCENE_RESET puts its own object back. Belts are static in this version.
+-->
+<sdf version="1.7">
+  <world name="mery6_workcell">
+
+    <plugin name="ros_link_attacher_plugin" filename="libgazebo_ros_link_attacher.so"/>
+
+    <light name="sun" type="directional">
+      <cast_shadows>1</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>1</static>
+      <link name="ground_plane_link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
+          <surface><friction><ode><mu>100</mu><mu2>50</mu2></ode></friction></surface>
+        </collision>
+        <visual name="visual">
+          <cast_shadows>0</cast_shadows>
+          <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material>
+        </visual>
+      </link>
+    </model>
+
+    <physics type="ode">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1</real_time_factor>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+    <gravity>0 0 -9.8</gravity>
+    <scene>
+      <ambient>0.4 0.4 0.4 1</ambient>
+      <background>0.7 0.7 0.7 1</background>
+      <shadows>1</shadows>
+    </scene>
+
+    <!-- Robot pedestal -->
+    <model name="pedestal">
+      <static>1</static>
+      <pose>0 0 0.20 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.20 0.20 0.40</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>0.20 0.20 0.40</size></box></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/DarkGrey</name></script></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ===================== Barista fixtures (unchanged from barista.world) ===================== -->
+    <model name="table">
+      <static>1</static>
+      <pose>0.55 0 0 0 0 0</pose>
+      <link name="link">
+        <collision name="top"><pose>0 0 0.40 0 0 0</pose><geometry><box><size>0.60 0.80 0.03</size></box></geometry>
+          <surface><friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode></friction></surface></collision>
+        <visual name="top_visual"><pose>0 0 0.40 0 0 0</pose><geometry><box><size>0.60 0.80 0.03</size></box></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Wood</name></script></material></visual>
+        <collision name="leg1"><pose> 0.27  0.37 0.1925 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.385</length></cylinder></geometry></collision>
+        <visual    name="leg1_v"><pose> 0.27  0.37 0.1925 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.385</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material></visual>
+        <collision name="leg2"><pose> 0.27 -0.37 0.1925 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.385</length></cylinder></geometry></collision>
+        <visual    name="leg2_v"><pose> 0.27 -0.37 0.1925 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.385</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material></visual>
+        <collision name="leg3"><pose>-0.27  0.37 0.1925 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.385</length></cylinder></geometry></collision>
+        <visual    name="leg3_v"><pose>-0.27  0.37 0.1925 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.385</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material></visual>
+        <collision name="leg4"><pose>-0.27 -0.37 0.1925 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.385</length></cylinder></geometry></collision>
+        <visual    name="leg4_v"><pose>-0.27 -0.37 0.1925 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.385</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material></visual>
+      </link>
+    </model>
+
+    <model name="cup">
+      <static>0</static>
+      <pose>0.42 -0.15 0.465 0 0 0</pose>
+      <link name="link">
+        <inertial>
+          <mass>0.05</mass>
+          <inertia><ixx>5.7e-05</ixx><iyy>5.7e-05</iyy><izz>3.1e-05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
+        </inertial>
+        <collision name="collision">
+          <geometry><cylinder><radius>0.035</radius><length>0.10</length></cylinder></geometry>
+          <surface><friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction>
+            <contact><ode><kp>1e6</kp><kd>100</kd><min_depth>0.001</min_depth></ode></contact></surface>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.035</radius><length>0.10</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/White</name></script></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="coffee_machine">
+      <static>1</static>
+      <pose>0.75 0 0.615 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.20 0.30 0.40</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>0.20 0.30 0.40</size></box></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Black</name></script></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="place_pad">
+      <static>1</static>
+      <pose>0.42 0.15 0.42 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.15 0.15 0.01</size></box></geometry>
+          <surface><friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction></surface></collision>
+        <visual name="visual">
+          <geometry><box><size>0.15 0.15 0.01</size></box></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Green</name></script></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ===================== Conveyor fixtures (left / right of the robot, static) ===================== -->
+    <model name="input_belt">
+      <static>1</static>
+      <pose>-0.05 -0.58 0 0 0 0</pose>
+      <link name="link">
+        <collision name="body"><pose>0 0 0.39 0 0 0</pose><geometry><box><size>0.60 0.30 0.05</size></box></geometry>
+          <surface><friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction></surface></collision>
+        <visual name="body_visual"><pose>0 0 0.39 0 0 0</pose><geometry><box><size>0.60 0.30 0.05</size></box></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Black</name></script></material></visual>
+        <visual name="frame_visual"><pose>0 0 0.36 0 0 0</pose><geometry><box><size>0.64 0.34 0.02</size></box></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Blue</name></script></material></visual>
+        <collision name="leg1"><pose> 0.28  0.13 0.175 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.35</length></cylinder></geometry></collision>
+        <visual    name="leg1_v"><pose> 0.28  0.13 0.175 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.35</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material></visual>
+        <collision name="leg2"><pose> 0.28 -0.13 0.175 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.35</length></cylinder></geometry></collision>
+        <visual    name="leg2_v"><pose> 0.28 -0.13 0.175 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.35</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material></visual>
+        <collision name="leg3"><pose>-0.28  0.13 0.175 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.35</length></cylinder></geometry></collision>
+        <visual    name="leg3_v"><pose>-0.28  0.13 0.175 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.35</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material></visual>
+        <collision name="leg4"><pose>-0.28 -0.13 0.175 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.35</length></cylinder></geometry></collision>
+        <visual    name="leg4_v"><pose>-0.28 -0.13 0.175 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.35</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material></visual>
+      </link>
+    </model>
+
+    <model name="output_belt">
+      <static>1</static>
+      <pose>-0.05 0.58 0 0 0 0</pose>
+      <link name="link">
+        <collision name="body"><pose>0 0 0.39 0 0 0</pose><geometry><box><size>0.60 0.30 0.05</size></box></geometry>
+          <surface><friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction></surface></collision>
+        <visual name="body_visual"><pose>0 0 0.39 0 0 0</pose><geometry><box><size>0.60 0.30 0.05</size></box></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Black</name></script></material></visual>
+        <visual name="frame_visual"><pose>0 0 0.36 0 0 0</pose><geometry><box><size>0.64 0.34 0.02</size></box></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Blue</name></script></material></visual>
+        <collision name="leg1"><pose> 0.28  0.13 0.175 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.35</length></cylinder></geometry></collision>
+        <visual    name="leg1_v"><pose> 0.28  0.13 0.175 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.35</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material></visual>
+        <collision name="leg2"><pose> 0.28 -0.13 0.175 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.35</length></cylinder></geometry></collision>
+        <visual    name="leg2_v"><pose> 0.28 -0.13 0.175 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.35</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material></visual>
+        <collision name="leg3"><pose>-0.28  0.13 0.175 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.35</length></cylinder></geometry></collision>
+        <visual    name="leg3_v"><pose>-0.28  0.13 0.175 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.35</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material></visual>
+        <collision name="leg4"><pose>-0.28 -0.13 0.175 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.35</length></cylinder></geometry></collision>
+        <visual    name="leg4_v"><pose>-0.28 -0.13 0.175 0 0 0</pose><geometry><cylinder><radius>0.02</radius><length>0.35</length></cylinder></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Grey</name></script></material></visual>
+      </link>
+    </model>
+
+    <model name="product">
+      <static>0</static>
+      <pose>-0.05 -0.58 0.455 0 0 0</pose>
+      <link name="link">
+        <inertial>
+          <mass>0.1</mass>
+          <inertia><ixx>8.3e-05</ixx><iyy>8.3e-05</iyy><izz>6.0e-05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
+        </inertial>
+        <collision name="collision">
+          <geometry><box><size>0.06 0.06 0.08</size></box></geometry>
+          <surface><friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction>
+            <contact><ode><kp>1e6</kp><kd>100</kd><min_depth>0.001</min_depth></ode></contact></surface>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.06 0.06 0.08</size></box></geometry>
+          <material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>Gazebo/Orange</name></script></material>
+        </visual>
+      </link>
+    </model>
+
+    <gui fullscreen="0">
+      <camera name="user_camera">
+        <pose>2.4 -2.2 1.8 0 0.4 2.4</pose>
+        <view_controller>orbit</view_controller>
+      </camera>
+    </gui>
+
+  </world>
+</sdf>
