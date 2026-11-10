@@ -22,6 +22,8 @@
 
 tasks:
 
+  # Barista carry: RETRACT_PICK lifts the cup 8 cm straight up from PICK and PRE_PLACE moves it in a straight, level line
+  # to 8 cm above PLACE (no planner-chosen arc through the air). Both are relative to the taught PICK / PLACE TCPs.
   barista:
     description: "Pick the cup at the coffee machine side and place it on the service pad (kinematic attachment)"
     steps:
@@ -34,9 +36,9 @@ tasks:
       - {name: PICK,            type: cartesian_to,  pose: PICK,      speed: 10}
       - {name: GRIPPER_CLOSE,   type: gripper,       action: close}
       - {name: ATTACH_CUP,      type: attach,        object: cup}
-      - {name: RETRACT_PICK,    type: cartesian_to,  pose: PRE_PICK,  speed: 15}
+      - {name: RETRACT_PICK,    type: cartesian_to,  pose: PICK,      dxyz: [0.0, 0.0, 0.08], speed: 15}
       - {name: VERIFY_LIFT,     type: verify_object, object: cup, expect: lifted}
-      - {name: PRE_PLACE,       type: named,         pose: PRE_PLACE, speed: 30}
+      - {name: PRE_PLACE,       type: cartesian_to,  pose: PLACE,     dxyz: [0.0, 0.0, 0.08], speed: 30}
       - {name: PLACE,           type: cartesian_to,  pose: PLACE,     speed: 10}
       - {name: RELEASE,         type: gripper,       action: open}
       - {name: DETACH_CUP,      type: detach,        object: cup}

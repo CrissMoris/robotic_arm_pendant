@@ -52,7 +52,8 @@ MoveIt joint-space plans.
 Barista sequence (Phase D, 13 steps): `STATE_CHECK` (no motion: fresh joint states, arm stationary, current state
 collision-free) → `READY_IF_NEEDED` (moves to READY only if the arm is not already there and no direct collision-checked
 plan to PRE_PICK exists; the feasibility plan is never executed) → `PRE_PICK` → `APPROACH_PICK` → `GRIPPER_OPEN` →
-`PICK` → `GRIPPER_CLOSE` → `RETRACT_PICK` (straight lift) → `PRE_PLACE` (planner-chosen, collision-checked transfer) →
+`PICK` → `GRIPPER_CLOSE` → `RETRACT_PICK` (straight 8 cm lift above PICK) → `PRE_PLACE` (straight, level move to 8 cm
+above PLACE; the conveyor task keeps a planner-chosen, collision-checked transfer) →
 `PLACE` → `RELEASE` → `RETRACT_PLACE` → `HOME` (mandatory final step). The former TRANSFER return to READY and the
 leading HOME/READY moves are gone; the taught pose values are unchanged. A failed or stopped task performs **no
 automatic recovery motion**; the operator decides the next command. Status extras: `task.steps[i].note` /
