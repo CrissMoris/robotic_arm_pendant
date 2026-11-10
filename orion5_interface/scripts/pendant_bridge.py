@@ -791,35 +791,38 @@ class PendantBridge(object):
             return False
         ok, err = self.wait_for_target(target, timeout=1.5)
         if not ok:
-            self.set_state(STATE_FAILED, "target not reached (max err %.2f°)" % math.degrees(err))
+            self.set_state(STATE_FAILED, ("target reached but joints did not settle (max err %.2f°)" if err < self.joint_tol
+                                          else "target not reached (max err %.2f°)") % math.degrees(err))
             return False
         self.set_state(STATE_REACHED)
         return True
 
     def wait_for_target(self, target, timeout, tol=None):
-        """True when all joints in target are within tolerance and (nearly) stopped for settle_time."""
+        """True when all joints in target are within tolerance and (nearly) stopped for settle_time.
+        "Stopped" is measured from the joint positions (drift over the settle window <= vel_tol x settle_time), not from
+        the /joint_states velocity: Gazebo reports a residual velocity for position-held joints under gravity (e.g. the
+        extended conveyor poses) even when the position is exact and the arm does not move."""
         tol = self.joint_tol if tol is None else tol
+        drift_tol = self.vel_tol * self.settle_time
         names = list(target.keys())
         goal = [target[n] for n in names]
         t0 = self._now()                      # execution clock (sim time under Gazebo)
         w0 = time.time()
         wall_cap = self._wall_cap(timeout, 10.0)
-        settled_since = None
+        settled_since, ref = None, None
         max_err = float("inf")
         while not rospy.is_shutdown():
             if self.stop_evt.is_set():
                 raise StopRequested()
             pos = self.js.positions(names)
-            vel = self.js.velocities(names)
             if pos is not None:
                 max_err = max(abs(p - g) for p, g in zip(pos, goal))
-                max_vel = max(abs(v) for v in vel)
-                if max_err < tol and max_vel < self.vel_tol:
-                    settled_since = settled_since or self._now()
-                    if self._now() - settled_since >= self.settle_time:
-                        return True, max_err
-                else:
+                if max_err >= tol:
                     settled_since = None
+                elif settled_since is None or max(abs(p - r) for p, r in zip(pos, ref)) > drift_tol:
+                    settled_since, ref = self._now(), pos     # (re)start the settle window at the current position
+                elif self._now() - settled_since >= self.settle_time:
+                    return True, max_err
             if self._now() - t0 > timeout or time.time() - w0 > wall_cap:
                 return False, max_err
             time.sleep(0.02)

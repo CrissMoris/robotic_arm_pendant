@@ -4,7 +4,7 @@
 
 status_rate: 10.0          # Hz, /pendant/status
 joint_tol_rad: 0.02        # completion check: |live - target| per joint (~1.1 deg)
-vel_tol_rad_s: 0.02        # completion check: joint must be (nearly) stopped
+vel_tol_rad_s: 0.02        # completion check: joint must be (nearly) stopped (position drift <= vel_tol x settle_time)
 settle_time: 0.2           # s, tolerance must hold this long
 default_speed_pct: 30      # MoveIt velocity/acceleration scaling (percent)
 wall_cap_factor: 4.0       # wall-clock cap = factor x (simulation-time) timeout / measured RTF, see README "simulation time"
